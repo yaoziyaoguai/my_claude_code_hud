@@ -56,8 +56,8 @@ The tradeoff is slightly higher latency (~50ms polling interval vs. socket push)
 
 ### Data Flow
 
-1. Claude Code fires `PreToolUse` / `PostToolUse` / `Stop` / `SubagentStop` hooks
-2. `hook.py` reads the event JSON from stdin, adds `ts` (Unix timestamp), appends to `/tmp/claude-hud/{session_id}.jsonl`
+1. Claude Code fires `PreToolUse` / `PostToolUse` / `Stop` hooks
+2. `hook.py` reads the event JSON from stdin, reads `session_id` from `CLAUDE_SESSION_ID` env var, adds `ts` (Unix timestamp) and `hook_type` (from CLI arg), appends to `/tmp/claude-hud/{session_id}.jsonl`
 3. `hud/watcher.py` (`watchfiles` async watcher) detects new lines and parses them
 4. Parsed events are posted to the Textual app via `app.post_message()`
 5. Textual widgets update reactively
@@ -66,13 +66,11 @@ The tradeoff is slightly higher latency (~50ms polling interval vs. socket push)
 
 ## Hook Payload Reference
 
-Claude Code delivers the following JSON on hook stdin. These are the exact field names.
+Claude Code delivers the following JSON on hook stdin. `session_id` is **not** in the JSON — it is available only via the `CLAUDE_SESSION_ID` environment variable. Hook type is determined by the settings.json key, not a payload field.
 
 **PreToolUse:**
 ```json
 {
-  "session_id": "abc123",
-  "hook_event_name": "PreToolUse",
   "tool_name": "Read",
   "tool_input": { "file_path": "src/index.ts" }
 }
@@ -81,38 +79,37 @@ Claude Code delivers the following JSON on hook stdin. These are the exact field
 **PostToolUse:**
 ```json
 {
-  "session_id": "abc123",
-  "hook_event_name": "PostToolUse",
   "tool_name": "Read",
   "tool_input": { "file_path": "src/index.ts" },
-  "tool_response": { "content": "..." }
+  "tool_output": { "output": "..." },
+  "usage": { "input_tokens": 1200, "output_tokens": 340 }
 }
 ```
 
-**Stop / SubagentStop:**
+Note: `tool_output` (not `tool_response`). Token usage may appear as `usage` or `token_usage` with `input_tokens`/`output_tokens` or `prompt_tokens`/`completion_tokens`.
+
+**Stop:**
 ```json
 {
-  "session_id": "abc123",
-  "hook_event_name": "Stop",
-  "stop_reason": "end_turn"
+  "transcript_path": "/path/to/session/transcript.jsonl"
 }
 ```
 
-`hook.py` adds two fields before writing:
+`hook.py` adds these fields before writing to JSONL:
 - `ts`: `time.time()` (Unix float timestamp)
-- `call_id`: UUID4 string, generated once per `PreToolUse` and repeated in the matching `PostToolUse` (see Duration Correlation below)
+- `session_id`: read from `os.environ["CLAUDE_SESSION_ID"]`
+- `hook_type`: `"pre"` / `"post"` / `"stop"` (passed as CLI argument, since payload has no type indicator)
 
 ---
 
 ## Duration Correlation
 
-`hook.py` generates a `call_id` (UUID4) on `PreToolUse` and includes it in both the `pre` and `post` events written to the JSONL. Duration is computed in `parser.py` (not in `hook.py`):
+Pre 和 Post 是两次独立的脚本调用，无法共享 `call_id`。Duration 在 `parser.py` 中用近似匹配计算：
 
-- `parser.py` maintains an in-memory `dict[call_id → pre_ts]`
-- On a `post` event, it looks up `pre_ts`, computes `duration_ms = (post_ts - pre_ts) * 1000`, and removes the entry
-- If no `pre` event was seen (e.g., HUD started mid-session), `duration_ms` is `null`
-
-This keeps `hook.py` simple (append-only) and moves all stateful logic into the HUD process where failures are recoverable.
+- `parser.py` maintains an in-memory `dict[(session_id, tool_name) → pre_ts]`
+- On a `post` event, it looks up the most recent `pre` event with matching `(session_id, tool_name)`, computes `duration_ms = (post_ts - pre_ts) * 1000`, and removes the entry
+- If no matching `pre` event exists, `duration_ms` is `null`
+- For parallel tool calls of the same type, duration may be approximate (acceptable for monitoring)
 
 ---
 
@@ -164,12 +161,12 @@ Rules:
 
 | Module | Source | Notes |
 |--------|--------|-------|
-| Tool calls | `PostToolUse` hook | Name, input summary, duration via `call_id` correlation |
+| Tool calls | `PostToolUse` hook | Name, input summary, duration via `(session_id, tool_name)` correlation |
 | Skill activations | `PostToolUse` where `tool_name == "Skill"` | `tool_input["skill"]` field |
-| Agent tree | `PostToolUse` where `tool_name == "Agent"` + `session_id` | `tool_input["description"]` (truncated to 60 chars) |
-| Token stats | Interactive mode: always `--`. Headless integration deferred to v2. |
+| Agent tree | `PostToolUse` where `tool_name == "Agent"` | `tool_input["description"]` (truncated to 60 chars) |
+| Token stats | `PostToolUse` hook `usage` field | `input_tokens` / `output_tokens`, cumulative in HUD |
 
-**Token limitation**: Claude Code's interactive mode does not expose token usage via hooks or any other synchronous channel accessible to a monitoring tool without wrapping the `claude` process. Token stats are explicitly out of scope for v1. The token panel will display `-- / -- / --` with a tooltip "available in headless mode (v2)".
+**Token stats**: PostToolUse hooks include `usage` (or `token_usage`) with `input_tokens`/`output_tokens`. HUD accumulates these per session. Note: not every PostToolUse event may contain usage — HUD should handle missing fields gracefully.
 
 ---
 
@@ -182,7 +179,6 @@ from typing import Literal
 @dataclass
 class ToolEvent:
     session_id: str
-    call_id: str
     tool_name: str
     input_summary: str     # first 60 chars of key fields from tool_input
     ts: float
@@ -190,6 +186,8 @@ class ToolEvent:
     success: bool | None   # None during pre phase
     duration_ms: int | None  # populated on post; None if pre not seen
     error_excerpt: str | None  # first 80 chars of error if failed
+    input_tokens: int | None   # from usage field, may be None
+    output_tokens: int | None
 
 @dataclass
 class AgentEvent:
@@ -206,8 +204,7 @@ class SkillEvent:
 @dataclass
 class StopEvent:
     session_id: str
-    stop_reason: str       # "end_turn", "max_turns", etc.
-    is_subagent: bool
+    transcript_path: str | None  # path to session transcript JSONL
     ts: float
 ```
 
@@ -233,7 +230,8 @@ claude-hud/
 │   ├── parser.py          # Raw JSON line → typed event
 │   └── widgets/
 │       ├── event_stream.py   # Scrollable event log (left panel)
-│       └── summary.py        # Counters + token placeholder (right panel)
+│       ├── summary.py        # Counters + token stats (right panel)
+│       └── tokens.py         # Token accumulator widget
 ├── hook.py                # Hook script (~30 lines + error handling)
 └── install.py             # Writes hook config to ~/.claude/settings.json
 ```
@@ -254,22 +252,27 @@ claude-hud/
 {
   "hooks": {
     "PreToolUse": [
-      { "hooks": [{ "type": "command", "command": "python /path/to/hook.py" }] }
+      {
+        "matcher": "*",
+        "hooks": [{ "type": "command", "command": "python /path/to/hook.py pre" }]
+      }
     ],
     "PostToolUse": [
-      { "hooks": [{ "type": "command", "command": "python /path/to/hook.py" }] }
+      {
+        "matcher": "*",
+        "hooks": [{ "type": "command", "command": "python /path/to/hook.py post", "async": true }]
+      }
     ],
     "Stop": [
-      { "hooks": [{ "type": "command", "command": "python /path/to/hook.py" }] }
-    ],
-    "SubagentStop": [
-      { "hooks": [{ "type": "command", "command": "python /path/to/hook.py" }] }
+      {
+        "hooks": [{ "type": "command", "command": "python /path/to/hook.py stop", "async": true }]
+      }
     ]
   }
 }
 ```
 
-If `hooks` already has entries for these keys, the new command is appended to the existing array.
+Note: `matcher: "*"` matches all tools. PostToolUse and Stop use `"async": true` so they don't block Claude. The CLI arg (`pre`/`post`/`stop`) tells `hook.py` which hook type fired.
 
 ---
 
@@ -294,7 +297,7 @@ claude
 
 ## Constraints & Known Limitations
 
-1. **Token stats**: Not available in interactive mode (v1 shows `--`). Headless integration deferred to v2.
+1. **Token stats**: Available via PostToolUse `usage` field. Not every event includes usage — HUD accumulates what it receives and shows `--` when no data yet.
 2. **Agent internals**: Hooks are globally registered via `~/.claude/settings.json`, so subagent tool calls are captured automatically.
 3. **HUD start order**: HUD can be started before or after `claude`. Events are durable (written to file); the HUD replays from the start of the current session's log on connect.
 4. **Multi-session**: Multiple simultaneous Claude sessions each write to their own JSONL file. The HUD shows the session with the most recent event.
@@ -305,7 +308,6 @@ claude
 
 ## Out of Scope (v1)
 
-- Token stats in interactive mode
 - Historical session replay beyond current session
 - Web UI or IDE extension
 - Windows support
