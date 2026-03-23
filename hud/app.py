@@ -6,7 +6,6 @@ from textual.app import App, ComposeResult
 from textual.containers import Horizontal
 from textual.css.query import NoMatches
 
-from hud.models import ToolEvent, AgentEvent, SkillEvent, StopEvent
 from hud.parser import EventParser
 from hud.watcher import SessionWatcher
 from hud.widgets.event_stream import EventStreamWidget
