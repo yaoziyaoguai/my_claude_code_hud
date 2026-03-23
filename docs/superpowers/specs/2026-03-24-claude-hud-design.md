@@ -230,8 +230,7 @@ claude-hud/
 │   ├── parser.py          # Raw JSON line → typed event
 │   └── widgets/
 │       ├── event_stream.py   # Scrollable event log (left panel)
-│       ├── summary.py        # Counters + token stats (right panel)
-│       └── tokens.py         # Token accumulator widget
+│       └── summary.py        # Counters + token stats (right panel)
 ├── hook.py                # Hook script (~30 lines + error handling)
 └── install.py             # Writes hook config to ~/.claude/settings.json
 ```

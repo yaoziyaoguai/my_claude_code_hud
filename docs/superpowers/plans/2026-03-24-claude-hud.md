@@ -24,12 +24,12 @@ claude-hud/
 │   ├── parser.py              # Raw JSON dict → typed event, duration correlation
 │   ├── watcher.py             # Async file watcher: tail JSONL, discover sessions
 │   ├── app.py                 # Textual App: layout, message routing
+│   ├── install.py             # Writes hook config to ~/.claude/settings.json
 │   └── widgets/
 │       ├── __init__.py
 │       ├── event_stream.py    # Left panel: scrollable event log
 │       └── summary.py         # Right panel: counters + token stats
 ├── hook.py                    # Hook script for settings.json (~40 lines)
-├── install.py                 # Writes hook config to ~/.claude/settings.json
 └── tests/
     ├── __init__.py
     ├── test_models.py
@@ -56,7 +56,7 @@ claude-hud/
 ```toml
 [build-system]
 requires = ["setuptools>=68.0"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "claude-hud"
@@ -325,6 +325,38 @@ def test_token_usage_fallback_field_names():
     ev = parser.parse(raw)
     assert ev.input_tokens == 200
     assert ev.output_tokens == 80
+
+
+def test_parse_failed_tool_with_error_excerpt():
+    parser = EventParser()
+    raw = {
+        "tool_name": "Bash",
+        "tool_input": {"command": "npm test"},
+        "tool_output": {"output": "", "error": "Error: test suite failed with 3 failures in auth module"},
+        "session_id": "abc",
+        "hook_type": "post",
+        "ts": 1000.0,
+    }
+    ev = parser.parse(raw)
+    assert isinstance(ev, ToolEvent)
+    assert ev.success is False
+    assert ev.error_excerpt is not None
+    assert "test suite failed" in ev.error_excerpt
+    assert len(ev.error_excerpt) <= 80
+
+
+def test_parse_tool_with_empty_output_is_success():
+    parser = EventParser()
+    raw = {
+        "tool_name": "Edit",
+        "tool_input": {"file_path": "a.py"},
+        "tool_output": {},
+        "session_id": "abc",
+        "hook_type": "post",
+        "ts": 1000.0,
+    }
+    ev = parser.parse(raw)
+    assert ev.success is True
 ```
 
 - [ ] **Step 2: Run tests — expect FAIL**
@@ -418,7 +450,9 @@ class EventParser:
         pre_ts = self._pending.pop(key, None)
         duration_ms = int((ts - pre_ts) * 1000) if pre_ts is not None else None
         tool_output = raw.get("tool_output", {})
-        success = tool_output.get("output") is not None if tool_output else True
+        error_text = tool_output.get("error") or tool_output.get("stderr") or ""
+        success = not bool(error_text)
+        error_excerpt = error_text[:80] if error_text else None
         input_tokens, output_tokens = _extract_tokens(raw)
 
         return ToolEvent(
@@ -429,6 +463,7 @@ class EventParser:
             phase="post",
             success=success,
             duration_ms=duration_ms,
+            error_excerpt=error_excerpt,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
         )
@@ -437,7 +472,7 @@ class EventParser:
 - [ ] **Step 4: Run tests — expect PASS**
 
 Run: `python -m pytest tests/test_parser.py -v`
-Expected: 8 passed
+Expected: 10 passed
 
 - [ ] **Step 5: Commit**
 
@@ -600,8 +635,14 @@ def main() -> None:
 if __name__ == "__main__":
     try:
         main()
-    except Exception:
-        pass
+    except Exception as exc:
+        try:
+            base_dir = os.environ.get("CLAUDE_HUD_DIR", "/tmp/claude-hud")
+            os.makedirs(base_dir, exist_ok=True)
+            with open(os.path.join(base_dir, "hook-errors.log"), "a") as f:
+                f.write(f"{time.time()} {exc}\n")
+        except Exception:
+            pass
     sys.exit(0)
 ```
 
@@ -924,28 +965,29 @@ class SummaryWidget(Static):
         )
 ```
 
-- [ ] **Step 4: Write smoke test for app**
+- [ ] **Step 4: Write tests for widgets (before implementation — TDD)**
 
 ```python
 # tests/test_app.py
+from unittest.mock import patch
 from hud.models import ToolEvent, SkillEvent, AgentEvent, StopEvent
-from hud.widgets.event_stream import EventStreamWidget
 from hud.widgets.summary import SummaryWidget
 
 
 def test_summary_counts():
     s = SummaryWidget()
     s._session_id = "abc"
-    s.update_event(ToolEvent(
-        session_id="abc", tool_name="Read", input_summary="x",
-        ts=1.0, phase="post", success=True,
-    ))
-    s.update_event(ToolEvent(
-        session_id="abc", tool_name="Bash", input_summary="y",
-        ts=2.0, phase="post", success=False,
-    ))
-    s.update_event(SkillEvent(session_id="abc", skill_name="tdd", ts=3.0))
-    s.update_event(AgentEvent(session_id="abc", child_description="rev", ts=4.0))
+    with patch.object(s, "_render"):  # avoid calling self.update() without mount
+        s.update_event(ToolEvent(
+            session_id="abc", tool_name="Read", input_summary="x",
+            ts=1.0, phase="post", success=True,
+        ))
+        s.update_event(ToolEvent(
+            session_id="abc", tool_name="Bash", input_summary="y",
+            ts=2.0, phase="post", success=False,
+        ))
+        s.update_event(SkillEvent(session_id="abc", skill_name="tdd", ts=3.0))
+        s.update_event(AgentEvent(session_id="abc", child_description="rev", ts=4.0))
     assert s._tools == 2
     assert s._errors == 1
     assert s._skills == 1
@@ -955,12 +997,35 @@ def test_summary_counts():
 def test_summary_reset():
     s = SummaryWidget()
     s._tools = 5
-    s.reset("new-session")
+    with patch.object(s, "_render"):
+        s.reset("new-session")
     assert s._tools == 0
     assert s._session_id == "new-session"
+
+
+def test_summary_token_accumulation():
+    s = SummaryWidget()
+    with patch.object(s, "_render"):
+        s.update_event(ToolEvent(
+            session_id="abc", tool_name="Read", input_summary="x",
+            ts=1.0, phase="post", success=True, input_tokens=100, output_tokens=50,
+        ))
+        s.update_event(ToolEvent(
+            session_id="abc", tool_name="Bash", input_summary="y",
+            ts=2.0, phase="post", success=True, input_tokens=200, output_tokens=80,
+        ))
+    assert s._input_tokens == 300
+    assert s._output_tokens == 130
 ```
 
-- [ ] **Step 5: Run tests — expect PASS**
+- [ ] **Step 5: Run tests — expect FAIL**
+
+Run: `python -m pytest tests/test_app.py -v`
+Expected: `ModuleNotFoundError` (widgets not yet created)
+
+- [ ] **Step 6: Implement widgets** (event_stream.py and summary.py as shown above)
+
+- [ ] **Step 7: Run tests — expect PASS**
 
 Run: `python -m pytest tests/test_app.py -v`
 Expected: 2 passed
@@ -1032,23 +1097,20 @@ class HudApp(App):
         self.run_worker(self._watch_loop(), exclusive=True)
 
     async def _watch_loop(self) -> None:
-        # Try to find existing session first
-        latest = self._watcher.discover_latest_session()
-        if latest:
-            self._switch_session(latest)
-            async for raw in self._watcher.tail(latest):
+        tail_task: asyncio.Task | None = None
+
+        async def _tail_session(session_id: str) -> None:
+            async for raw in self._watcher.tail(session_id):
                 self._handle_raw(raw)
-        else:
-            # Wait for first session
-            async for session_id in self._watcher.watch_for_sessions():
-                self._switch_session(session_id)
-                async for raw in self._watcher.tail(session_id):
-                    self._handle_raw(raw)
-                    # Check for newer sessions
-                    newer = self._watcher.discover_latest_session()
-                    if newer and newer != self._current_session:
-                        self._switch_session(newer)
-                        break
+
+        while True:
+            latest = self._watcher.discover_latest_session()
+            if latest and latest != self._current_session:
+                if tail_task and not tail_task.done():
+                    tail_task.cancel()
+                self._switch_session(latest)
+                tail_task = asyncio.create_task(_tail_session(latest))
+            await asyncio.sleep(0.5)
 
     def _switch_session(self, session_id: str) -> None:
         self._current_session = session_id
@@ -1093,7 +1155,7 @@ def main() -> None:
         app.run()
 
     elif command == "install":
-        from install import install_hooks
+        from hud.install import install_hooks
         install_hooks()
 
     else:
@@ -1122,7 +1184,7 @@ git commit -m "feat: textual app with layout and event routing"
 ### Task 7: Install Script
 
 **Files:**
-- Create: `install.py`
+- Create: `hud/install.py`
 - Create: `tests/test_install.py`
 
 - [ ] **Step 1: Write failing tests for install**
@@ -1132,7 +1194,7 @@ git commit -m "feat: textual app with layout and event routing"
 import json
 from pathlib import Path
 
-from install import install_hooks
+from hud.install import install_hooks
 
 
 def test_install_creates_hooks_in_empty_settings(tmp_path):
@@ -1187,7 +1249,7 @@ def test_install_preserves_existing_hooks(tmp_path):
 Run: `python -m pytest tests/test_install.py -v`
 Expected: `ModuleNotFoundError: No module named 'install'`
 
-- [ ] **Step 3: Implement `install.py`**
+- [ ] **Step 3: Implement `hud/install.py`**
 
 ```python
 """Install Claude HUD hooks into ~/.claude/settings.json."""
@@ -1266,7 +1328,7 @@ Expected: 3 passed
 - [ ] **Step 5: Commit**
 
 ```bash
-git add install.py tests/test_install.py
+git add hud/install.py tests/test_install.py
 git commit -m "feat: install script for settings.json hook registration"
 ```
 
