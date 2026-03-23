@@ -1,0 +1,87 @@
+<h2>TUI 侧边栏布局</h2>
+<p class="subtitle">选择你偏好的 HUD 面板排列方式</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>顶部 Token 条 + 三栏并排</h3>
+      <div style="font-family:monospace;font-size:11px;margin-top:10px;background:#1e1e2e;border-radius:6px;padding:10px;color:#cdd6f4;line-height:1.6">
+        <div style="border-bottom:1px solid #313244;padding-bottom:6px;margin-bottom:6px;color:#89b4fa">
+          in: 12,450 │ out: 3,210 │ think: 8,900 │ ≈$0.042
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div>
+            <div style="color:#cba6f7;font-size:10px;margin-bottom:4px">TOOLS</div>
+            <div style="color:#a6e3a1">✓ Read</div>
+            <div style="color:#f38ba8">✗ Bash</div>
+            <div style="color:#fab387">… Edit</div>
+          </div>
+          <div>
+            <div style="color:#89b4fa;font-size:10px;margin-bottom:4px">AGENTS</div>
+            <div>◎ main</div>
+            <div style="padding-left:8px">└ reviewer</div>
+            <div style="padding-left:16px;color:#fab387">└ Explore…</div>
+          </div>
+          <div>
+            <div style="color:#89dceb;font-size:10px;margin-bottom:4px">SKILLS</div>
+            <div>◈ brainstorm</div>
+            <div style="color:#a6e3a1;padding-left:8px">✓ explore</div>
+            <div style="color:#fab387;padding-left:8px">… questions</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>四个垂直堆叠面板</h3>
+      <div style="font-family:monospace;font-size:11px;margin-top:10px;background:#1e1e2e;border-radius:6px;padding:10px;color:#cdd6f4;line-height:1.6">
+        <div style="border:1px solid #313244;border-radius:4px;padding:6px;margin-bottom:6px">
+          <div style="color:#cba6f7;font-size:10px;margin-bottom:3px">▾ TOOL CALLS</div>
+          <div><span style="color:#a6e3a1">✓</span> Read <span style="color:#585b70">src/index.ts 120ms</span></div>
+          <div><span style="color:#f38ba8">✗</span> Bash <span style="color:#585b70">npm test 2.3s</span></div>
+        </div>
+        <div style="border:1px solid #313244;border-radius:4px;padding:6px;margin-bottom:6px">
+          <div style="color:#89b4fa;font-size:10px;margin-bottom:3px">▾ AGENTS</div>
+          <div>◎ main → └ code-reviewer <span style="color:#fab387">running</span></div>
+        </div>
+        <div style="border:1px solid #313244;border-radius:4px;padding:6px;margin-bottom:6px">
+          <div style="color:#89dceb;font-size:10px;margin-bottom:3px">▾ SKILLS</div>
+          <div>◈ brainstorming  <span style="color:#fab387">step 3/9</span></div>
+        </div>
+        <div style="border:1px solid #313244;border-radius:4px;padding:6px">
+          <div style="color:#f9e2af;font-size:10px;margin-bottom:3px">▾ TOKENS</div>
+          <div>in 12k  out 3.2k  think 8.9k  <span style="color:#a6e3a1">$0.042</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>事件流 + 右侧摘要</h3>
+      <div style="font-family:monospace;font-size:11px;margin-top:10px;background:#1e1e2e;border-radius:6px;padding:10px;color:#cdd6f4;line-height:1.6;display:grid;grid-template-columns:2fr 1fr;gap:8px">
+        <div>
+          <div style="color:#585b70;font-size:10px;margin-bottom:4px">EVENT STREAM</div>
+          <div><span style="color:#585b70">12:01</span> <span style="color:#cba6f7">◈</span> brainstorming started</div>
+          <div><span style="color:#585b70">12:01</span> <span style="color:#a6e3a1">✓</span> Read src/index.ts</div>
+          <div><span style="color:#585b70">12:02</span> <span style="color:#89b4fa">◎</span> Agent: reviewer</div>
+          <div><span style="color:#585b70">12:02</span> <span style="color:#f38ba8">✗</span> Bash npm test</div>
+          <div><span style="color:#585b70">12:03</span> <span style="color:#fab387">…</span> Edit src/app.ts</div>
+        </div>
+        <div>
+          <div style="color:#585b70;font-size:10px;margin-bottom:4px">SUMMARY</div>
+          <div style="color:#cba6f7">skills: 1</div>
+          <div style="color:#89b4fa">agents: 2</div>
+          <div style="color:#a6e3a1">tools: 8</div>
+          <div style="color:#f38ba8">errors: 1</div>
+          <div style="margin-top:4px;color:#f9e2af">$0.042</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

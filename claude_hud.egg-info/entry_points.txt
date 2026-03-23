@@ -1,0 +1,2 @@
+[console_scripts]
+claude-hud = hud.__main__:main

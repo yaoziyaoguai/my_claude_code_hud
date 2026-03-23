@@ -1,0 +1,9 @@
+pyproject.toml
+claude_hud.egg-info/PKG-INFO
+claude_hud.egg-info/SOURCES.txt
+claude_hud.egg-info/dependency_links.txt
+claude_hud.egg-info/entry_points.txt
+claude_hud.egg-info/requires.txt
+claude_hud.egg-info/top_level.txt
+hud/__init__.py
+tests/test_models.py

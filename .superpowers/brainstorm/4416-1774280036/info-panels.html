@@ -1,0 +1,56 @@
+<h2>HUD 里展示哪些信息？</h2>
+<p class="subtitle">可多选 — 勾选你希望在侧边栏里看到的模块</p>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="tools" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>工具调用（Tool Calls）</h3>
+      <p>每次 Read / Bash / Edit / Grep 等调用的名称、参数摘要、耗时、成功/失败状态</p>
+      <div style="font-family:monospace;font-size:11px;margin-top:8px;color:#cdd6f4;background:#1e1e2e;border-radius:4px;padding:8px">
+        <span style="color:#a6e3a1">✓</span> Read  <span style="color:#6c7086">src/index.ts</span>  <span style="color:#585b70">120ms</span><br>
+        <span style="color:#f38ba8">✗</span> Bash  <span style="color:#6c7086">npm test</span>     <span style="color:#585b70">2.3s</span><br>
+        <span style="color:#fab387">…</span> Edit  <span style="color:#6c7086">src/app.ts</span>   <span style="color:#585b70">running</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="agents" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Agent / Subagent 树</h3>
+      <p>当前活跃的 agent 层级关系、每个 agent 的名称、状态、已用 token 数</p>
+      <div style="font-family:monospace;font-size:11px;margin-top:8px;color:#cdd6f4;background:#1e1e2e;border-radius:4px;padding:8px">
+        <span style="color:#89b4fa">◎ main</span>  <span style="color:#585b70">4.2k tok</span><br>
+        <span style="color:#cba6f7">  └ code-reviewer</span>  <span style="color:#585b70">1.1k tok</span><br>
+        <span style="color:#89dceb">      └ Explore</span>  <span style="color:#fab387">running…</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="skills" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Skill 激活记录</h3>
+      <p>哪些 skill 被触发、触发时间、当前执行到哪个步骤（checklist 进度）</p>
+      <div style="font-family:monospace;font-size:11px;margin-top:8px;color:#cdd6f4;background:#1e1e2e;border-radius:4px;padding:8px">
+        <span style="color:#cba6f7">◈ brainstorming</span><br>
+        <span style="color:#a6e3a1">  ✓ explore context</span><br>
+        <span style="color:#a6e3a1">  ✓ visual companion</span><br>
+        <span style="color:#fab387">  … ask questions</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="tokens" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Token / 费用统计</h3>
+      <p>输入/输出/thinking token 用量、本次会话累计费用估算、速率图表</p>
+      <div style="font-family:monospace;font-size:11px;margin-top:8px;color:#cdd6f4;background:#1e1e2e;border-radius:4px;padding:8px">
+        <span style="color:#89b4fa">in</span>  12,450  <span style="color:#89b4fa">out</span>  3,210<br>
+        <span style="color:#cba6f7">think</span>  8,900  <span style="color:#a6e3a1">≈ $0.042</span>
+      </div>
+    </div>
+  </div>
+</div>

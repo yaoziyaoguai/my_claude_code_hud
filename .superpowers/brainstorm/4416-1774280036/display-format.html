@@ -1,0 +1,53 @@
+<h2>这个 HUD 的展示形式是什么？</h2>
+<p class="subtitle">选择最符合你设想的展示方式</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>独立 Web 界面（浏览器 HUD）</h3>
+      <p>Claude Code 运行时，浏览器自动弹出一个实时看板，展示 agent 调用树、工具执行状态、skill 流转等信息。类似 Webpack Dashboard 或 Vite 的浏览器 UI。</p>
+      <div style="margin-top:12px;background:#1a1a2e;border-radius:6px;padding:12px;font-family:monospace;font-size:12px;color:#cdd6f4">
+        <div style="color:#89b4fa">● Agent: code-reviewer</div>
+        <div style="padding-left:16px;color:#a6e3a1">  ✓ Tool: Read (src/index.ts)</div>
+        <div style="padding-left:16px;color:#f38ba8">  ✗ Tool: Bash (npm test) — failed</div>
+        <div style="color:#cba6f7">● Skill: superpowers:brainstorming</div>
+        <div style="padding-left:16px;color:#89dceb">  … running</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>终端侧边栏（终端内 TUI 分屏）</h3>
+      <p>在终端右侧实时渲染一个文字面板，与 Claude Code 并排，无需离开终端环境。类似 tmux 分屏 + rich-TUI。</p>
+      <div style="margin-top:12px;display:flex;gap:8px;font-family:monospace;font-size:11px">
+        <div style="flex:2;background:#1e1e2e;border-radius:4px;padding:8px;color:#cdd6f4">
+          <div style="color:#89b4fa;margin-bottom:4px">claude-code&gt;</div>
+          <div>Let me read the file...</div>
+        </div>
+        <div style="flex:1;background:#181825;border-radius:4px;padding:8px;color:#cdd6f4;border-left:2px solid #cba6f7">
+          <div style="color:#cba6f7;font-size:10px;margin-bottom:4px">HUD</div>
+          <div style="color:#a6e3a1;font-size:10px">▶ Read</div>
+          <div style="color:#89b4fa;font-size:10px">▶ Agent</div>
+          <div style="color:#f38ba8;font-size:10px">✗ Bash</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>VS Code / Cursor 侧边栏扩展</h3>
+      <p>在 IDE 的 Activity Bar 中新增一个面板，展示 Claude Code 活动。适合在编辑器中工作时直接查看。</p>
+      <div style="margin-top:12px;background:#1e1e2e;border-radius:6px;padding:10px;font-family:monospace;font-size:11px;color:#cdd6f4">
+        <div style="color:#89b4fa;margin-bottom:6px">◈ CLAUDE CODE HUD</div>
+        <div style="color:#a6e3a1">  ● Tool Calls (3)</div>
+        <div style="color:#cba6f7">  ● Active Agents (1)</div>
+        <div style="color:#89dceb">  ● Skills (2)</div>
+      </div>
+    </div>
+  </div>
+</div>
