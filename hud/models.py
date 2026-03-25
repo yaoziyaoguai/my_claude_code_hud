@@ -14,6 +14,8 @@ class ToolEvent:
     error_excerpt: str | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
+    depth: int = 0
+    context_label: str | None = None
 
 
 @dataclass
@@ -21,6 +23,7 @@ class AgentEvent:
     session_id: str
     child_description: str
     ts: float
+    depth: int = 0
 
 
 @dataclass
@@ -28,6 +31,7 @@ class SkillEvent:
     session_id: str
     skill_name: str
     ts: float
+    depth: int = 0
 
 
 @dataclass
