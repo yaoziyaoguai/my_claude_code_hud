@@ -4,6 +4,7 @@ from textual.widgets import Static
 from rich.console import RichCast
 
 from hud.models import ToolEvent, AgentEvent, SkillEvent, StopEvent
+from hud.cost import estimate_cost
 
 
 class SummaryWidget(Static):
@@ -15,6 +16,7 @@ class SummaryWidget(Static):
         self._errors = 0
         self._input_tokens = 0
         self._output_tokens = 0
+        self._cost = 0.0
         self._session_id = ""
 
     def on_mount(self) -> None:
@@ -27,6 +29,7 @@ class SummaryWidget(Static):
         self._errors = 0
         self._input_tokens = 0
         self._output_tokens = 0
+        self._cost = 0.0
         self._session_id = session_id
         self.refresh()
 
@@ -35,10 +38,12 @@ class SummaryWidget(Static):
             self._tools += 1
             if event.success is False:
                 self._errors += 1
-            if event.input_tokens:
-                self._input_tokens += event.input_tokens
-            if event.output_tokens:
-                self._output_tokens += event.output_tokens
+            new_in = event.input_tokens or 0
+            new_out = event.output_tokens or 0
+            if new_in or new_out:
+                self._input_tokens += new_in
+                self._output_tokens += new_out
+                self._cost += estimate_cost(new_in, new_out)
         elif isinstance(event, AgentEvent):
             self._agents += 1
         elif isinstance(event, SkillEvent):
@@ -56,5 +61,6 @@ class SummaryWidget(Static):
             f"tools:   {self._tools}\n"
             f"[red]errors:  {self._errors}[/red]\n\n"
             f"[dim]in:[/dim]  {tok_in}\n"
-            f"[dim]out:[/dim] {tok_out}"
+            f"[dim]out:[/dim] {tok_out}\n"
+            f"~${self._cost:.3f}"
         )
