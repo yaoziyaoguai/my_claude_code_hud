@@ -8,10 +8,11 @@
 
 ## Overview
 
-This spec describes targeted improvements to Claude HUD v1 addressing three areas:
+This spec describes targeted improvements to Claude HUD v1 addressing four areas:
 1. **Visual polish** — split event stream into Active + History panels, newest-on-top ordering
 2. **Feature additions** — cost estimation, real-time pending tool elapsed time
 3. **UX fixes** — pending state no longer mixed with completed history
+4. **Hierarchy display** — agent/skill/tool calls shown with indented call tree
 
 ---
 
@@ -21,6 +22,7 @@ This spec describes targeted improvements to Claude HUD v1 addressing three area
 - Pending tools have a dedicated Active panel showing elapsed time in real-time
 - Summary panel shows estimated API cost
 - Both `[...]` (pre) and `[OK]`/`[ERR]` (post) lines are preserved, but in separate panels
+- Tool calls made within an agent or skill are visually indented under their parent
 
 ---
 
@@ -34,12 +36,14 @@ This spec describes targeted improvements to Claude HUD v1 addressing three area
 │  +3 more...                                 │              │
 ├─────────────────────────────────────────────│ skills:   1  │
 │ HISTORY                           (newest↑) │ agents:   2  │
-│ 12:03 [OK]   Edit    src/index.py  312ms   │ tools:    8  │
-│ 12:02 [ERR]  Bash    npm test    2,103ms   │ errors:   1  │
+│ 12:03 [AGENT] code-reviewer                │ tools:    8  │
+│   12:03 [OK]  Read   src/foo.py    88ms    │ errors:   1  │
+│   12:03 [OK]  Bash   npm test     312ms    │              │
+│ 12:02 [SKILL] tdd                          │ in:  12,400  │
+│   12:02 [OK]  Edit   src/main.py   44ms    │ out:  3,200  │
+│ 12:01 [OK]   Read    src/app.py    22ms    │ ~$0.042      │
+│ 12:00 [ERR]  Bash    npm install 2103ms    │              │
 │       exit 1: ENOENT package.json          │              │
-│ 12:01 [OK]   Read    src/foo.py     88ms   │ in:  12,400  │
-│ 12:01 [SKILL] brainstorming                │ out:  3,200  │
-│ 12:00 [AGENT] code-reviewer                │ ~$0.042      │
 └─────────────────────────────────────────────└──────────────┘
 ```
 
@@ -277,7 +281,116 @@ def estimate_cost(input_tokens: int, output_tokens: int) -> float:
 - `hud/widgets/event_stream.py` — replaced by `active.py` + `history.py`
 
 ### Unchanged Files
-- `hook.py`, `parser.py`, `models.py`, `watcher.py`, `install.py`
+- `hook.py`, `watcher.py`, `install.py`
+
+> Note: `models.py` and `parser.py` were originally listed as Unchanged but are now Modified — see Hierarchy Display section below.
+
+---
+
+## Hierarchy Display
+
+### Design
+
+Tool calls made inside an agent or skill are visually indented under their parent. Hierarchy is inferred from timing (time-series stack), not from explicit parent fields in the payload (which don't exist).
+
+**Visual rules:**
+- Depth 0 (main session): no indent — `12:01 [OK]   Read   src/app.py`
+- Depth 1 (inside agent/skill): 2-space indent — `  12:01 [OK]   Read   src/app.py`
+- Depth 2 (nested agent inside agent): 4-space indent — `    12:01 [OK]   Read   src/app.py`
+- Error excerpts indent by `depth * 2 + 7` spaces total
+
+**Approximation contract:** In serial execution this is 100% accurate. In parallel agents (two agents running simultaneously), tool calls may be misattributed to the wrong parent. This is accepted in v2.
+
+### Changes to `models.py`
+
+Add two fields to `ToolEvent`:
+
+```python
+@dataclass
+class ToolEvent:
+    ...  # existing fields unchanged
+    depth: int = 0             # call stack depth; 0 = main session
+    context_label: str | None = None  # name of enclosing agent/skill, or None
+```
+
+`AgentEvent` and `SkillEvent` also get `depth`:
+
+```python
+@dataclass
+class AgentEvent:
+    ...
+    depth: int = 0
+
+@dataclass
+class SkillEvent:
+    ...
+    depth: int = 0
+```
+
+`StopEvent` does not need depth.
+
+### Changes to `parser.py`
+
+`EventParser` gains a context stack:
+
+```python
+class EventParser:
+    def __init__(self) -> None:
+        self._pending: dict[tuple[str, str], float] = {}  # unchanged
+        self._context_stack: list[tuple[str, str]] = []
+        # Each entry: (label, tool_name) where label is agent description or skill name
+        # tool_name used to match the right post event for popping
+```
+
+**On Agent/Skill `pre`:** push to stack before returning `AgentEvent`/`SkillEvent`:
+```python
+# For Agent pre:
+self._context_stack.append((f"agent:{description[:20]}", "Agent"))
+return AgentEvent(depth=len(self._context_stack) - 1, ...)
+
+# For Skill pre:
+self._context_stack.append((f"skill:{skill_name}", "Skill"))
+return SkillEvent(depth=len(self._context_stack) - 1, ...)
+```
+
+**On Agent/Skill `post`:** pop from stack after computing the event:
+```python
+# Pop the most recent matching entry
+for i in range(len(self._context_stack) - 1, -1, -1):
+    if self._context_stack[i][1] == tool_name:  # "Agent" or "Skill"
+        self._context_stack.pop(i)
+        break
+```
+
+**All other tool events** inherit current depth and label:
+```python
+depth = len(self._context_stack)
+label = self._context_stack[-1][0] if self._context_stack else None
+return ToolEvent(depth=depth, context_label=label, ...)
+```
+
+**Stack reset:** `EventParser.__init__` is already called fresh on each `_switch_session`, so the stack is always clean per session.
+
+### Changes to `HistoryWidget`
+
+`add_event` uses `event.depth` to compute indent:
+
+```python
+indent = "  " * event.depth  # 2 spaces per depth level
+```
+
+For `ToolEvent` error excerpt line, indent = `"  " * event.depth + "       "` (depth indent + 7 spaces).
+
+### Updated File Changes
+
+**Modified Files** (updated from previous section):
+- `hud/models.py` — add `depth` + `context_label` fields to `ToolEvent`, `AgentEvent`, `SkillEvent`
+- `hud/parser.py` — add `_context_stack`, push/pop on Agent/Skill pre/post, propagate depth to all events
+
+**New test files** (additions):
+- `tests/test_parser_hierarchy.py` — covers: depth=0 for top-level tools; depth increments on Agent pre; depth decrements on Agent post; nested agent (depth 2); skill depth; stack reset on parser re-init
+
+
 
 ---
 
