@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from textual.widgets import Static
+from rich.console import RichCast
 
 from hud.models import ToolEvent, AgentEvent, SkillEvent, StopEvent
 
@@ -18,7 +19,6 @@ class SummaryWidget(Static):
 
     def on_mount(self) -> None:
         self.border_title = "SUMMARY"
-        self._render()
 
     def reset(self, session_id: str) -> None:
         self._tools = 0
@@ -28,7 +28,7 @@ class SummaryWidget(Static):
         self._input_tokens = 0
         self._output_tokens = 0
         self._session_id = session_id
-        self._render()
+        self.refresh()
 
     def update_event(self, event: ToolEvent | AgentEvent | SkillEvent | StopEvent) -> None:
         if isinstance(event, ToolEvent) and event.phase == "post":
@@ -43,13 +43,13 @@ class SummaryWidget(Static):
             self._agents += 1
         elif isinstance(event, SkillEvent):
             self._skills += 1
-        self._render()
+        self.refresh()
 
-    def _render(self) -> None:
+    def render(self) -> RichCast:
         sid = self._session_id[:8] if self._session_id else "--"
         tok_in = f"{self._input_tokens:,}" if self._input_tokens else "--"
         tok_out = f"{self._output_tokens:,}" if self._output_tokens else "--"
-        self.update(
+        return (
             f"[dim]{sid}[/dim]\n\n"
             f"skills:  {self._skills}\n"
             f"agents:  {self._agents}\n"
