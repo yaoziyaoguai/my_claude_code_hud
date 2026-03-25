@@ -3,20 +3,28 @@ from __future__ import annotations
 import asyncio
 
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal
+from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
 
 from hud.parser import EventParser
 from hud.watcher import SessionWatcher
-from hud.widgets.event_stream import EventStreamWidget
+from hud.widgets.active import ActiveWidget
+from hud.widgets.history import HistoryWidget
 from hud.widgets.summary import SummaryWidget
+from hud.models import ToolEvent
 
 CSS = """
 Horizontal {
     height: 100%;
 }
-EventStreamWidget {
+Vertical {
     width: 3fr;
+}
+ActiveWidget {
+    height: 7;
+    border: solid $accent;
+}
+HistoryWidget {
     border: solid $primary;
 }
 SummaryWidget {
@@ -39,7 +47,9 @@ class HudApp(App):
 
     def compose(self) -> ComposeResult:
         with Horizontal():
-            yield EventStreamWidget(id="stream")
+            with Vertical():
+                yield ActiveWidget()
+                yield HistoryWidget()
             yield SummaryWidget()
 
     async def on_mount(self) -> None:
@@ -65,19 +75,27 @@ class HudApp(App):
         self._current_session = session_id
         self._parser = EventParser()
         try:
-            stream = self.query_one("#stream", EventStreamWidget)
-            stream.clear_with_separator(session_id)
-            summary = self.query_one(SummaryWidget)
-            summary.reset(session_id)
+            self.query_one(ActiveWidget).reset()
+            self.query_one(HistoryWidget).reset(session_id)
+            self.query_one(SummaryWidget).reset(session_id)
         except NoMatches:
             pass
 
     def _handle_raw(self, raw: dict) -> None:
         event = self._parser.parse(raw)
         try:
-            stream = self.query_one("#stream", EventStreamWidget)
-            stream.add_event(event)
+            active = self.query_one(ActiveWidget)
+            history = self.query_one(HistoryWidget)
             summary = self.query_one(SummaryWidget)
-            summary.update_event(event)
         except NoMatches:
-            pass
+            return
+
+        if isinstance(event, ToolEvent) and event.phase == "pre":
+            active.add_pending(event)
+        elif isinstance(event, ToolEvent) and event.phase == "post":
+            active.remove_pending(event)
+            history.add_event(event)
+            summary.update_event(event)
+        else:
+            history.add_event(event)
+            summary.update_event(event)
