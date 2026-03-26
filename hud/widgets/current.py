@@ -59,6 +59,29 @@ class CurrentWidget(Widget):
 
         return (total, percentage)
 
+    def _read_transcript_tokens(self, transcript_path: str) -> tuple[int, int, int, int]:
+        """Read and sum all token counts from transcript file.
+
+        Returns: (input_tokens, cache_write, cache_read, output_tokens)
+        """
+        in_tok = cache_write = cache_read = out_tok = 0
+        try:
+            with open(transcript_path) as f:
+                for line in f:
+                    try:
+                        d = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if d.get("type") == "assistant":
+                        usage = d.get("message", {}).get("usage", {})
+                        in_tok += usage.get("input_tokens") or 0
+                        cache_write += usage.get("cache_creation_input_tokens") or 0
+                        cache_read += usage.get("cache_read_input_tokens") or 0
+                        out_tok += usage.get("output_tokens") or 0
+        except OSError:
+            pass
+        return (in_tok, cache_write, cache_read, out_tok)
+
     def add_pending(self, event: ToolEvent | AgentEvent | SkillEvent) -> None:
         """Add a pre-phase event to pending tracking."""
         tool_name, label = self._event_display(event)
@@ -82,6 +105,13 @@ class CurrentWidget(Widget):
         self._current_session_id = session_id
         self._current_model = self._read_model_from_settings()
         self._context_tokens = 0
+
+    def update_context_from_transcript(self, transcript_path: str | None) -> None:
+        """Read token counts from transcript and update context display."""
+        if not transcript_path:
+            return
+        in_tok, cache_write, cache_read, out_tok = self._read_transcript_tokens(transcript_path)
+        self._context_tokens = in_tok + cache_write + cache_read + out_tok
 
     def _event_display(self, event: ToolEvent | AgentEvent | SkillEvent) -> tuple[str, str]:
         """Extract tool name and display label from event."""

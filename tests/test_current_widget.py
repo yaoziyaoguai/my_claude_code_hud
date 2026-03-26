@@ -1,3 +1,4 @@
+import os
 import time
 from unittest.mock import patch, MagicMock
 from hud.widgets.current import CurrentWidget
@@ -183,3 +184,45 @@ def test_calculate_context_usage_handles_missing_values():
         output_tokens=None
     )
     assert result == (500, 0.25)  # 500 / 200000 * 100 = 0.25%
+
+
+def test_read_transcript_tokens_sums_all_events():
+    """Test reading and summing tokens from transcript."""
+    import json
+    import tempfile
+
+    w = CurrentWidget()
+    # Create temporary transcript
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
+        f.write(json.dumps({
+            "type": "assistant",
+            "message": {
+                "usage": {
+                    "input_tokens": 100,
+                    "output_tokens": 50,
+                    "cache_creation_input_tokens": 10,
+                    "cache_read_input_tokens": 5
+                }
+            }
+        }) + "\n")
+        f.write(json.dumps({
+            "type": "assistant",
+            "message": {
+                "usage": {
+                    "input_tokens": 200,
+                    "output_tokens": 75,
+                    "cache_creation_input_tokens": 0,
+                    "cache_read_input_tokens": 0
+                }
+            }
+        }) + "\n")
+        temp_path = f.name
+
+    try:
+        in_tok, cache_write, cache_read, out_tok = w._read_transcript_tokens(temp_path)
+        assert in_tok == 300
+        assert cache_write == 10
+        assert cache_read == 5
+        assert out_tok == 125
+    finally:
+        os.unlink(temp_path)
