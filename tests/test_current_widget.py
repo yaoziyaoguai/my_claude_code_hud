@@ -6,6 +6,22 @@ from hud.models import ToolEvent
 from rich.text import Text
 
 
+def _pre_event(tool_name, summary="x", session_id="s", ts=None):
+    """Helper to create a pre-phase ToolEvent."""
+    return ToolEvent(
+        session_id=session_id, tool_name=tool_name, input_summary=summary,
+        ts=ts or time.time(), phase="pre",
+    )
+
+
+def _post_event(tool_name, session_id="s"):
+    """Helper to create a post-phase ToolEvent."""
+    return ToolEvent(
+        session_id=session_id, tool_name=tool_name, input_summary="x",
+        ts=time.time(), phase="post", success=True,
+    )
+
+
 def test_read_model_from_settings_returns_model_name():
     """Test reading model from settings.json"""
     w = CurrentWidget()
@@ -36,12 +52,8 @@ def test_read_model_from_settings_returns_unknown_on_json_error():
 def test_add_pending_stores_entry():
     """Test adding pending entry"""
     w = CurrentWidget()
-    event = ToolEvent(
-        session_id="s", tool_name="Read", input_summary="src/foo.py",
-        ts=1000.0, phase="pre"
-    )
     with patch.object(w, "refresh"):
-        w.add_pending(event)
+        w.add_pending(_pre_event("Read", "src/foo.py", ts=1000.0))
     assert len(w._pending) == 1
 
 
@@ -49,19 +61,21 @@ def test_remove_pending_fifo():
     """Test FIFO removal of pending entries"""
     w = CurrentWidget()
     with patch.object(w, "refresh"):
-        w.add_pending(ToolEvent(
-            session_id="s", tool_name="Read", input_summary="a.py",
-            ts=1000.0, phase="pre"
-        ))
-        w.add_pending(ToolEvent(
-            session_id="s", tool_name="Read", input_summary="b.py",
-            ts=1001.0, phase="pre"
-        ))
-        w.remove_pending(ToolEvent(
-            session_id="s", tool_name="Read", input_summary="x",
-            ts=time.time(), phase="post"
-        ))
+        w.add_pending(_pre_event("Read", "a.py", ts=1000.0))
+        w.add_pending(_pre_event("Read", "b.py", ts=1001.0))
+        w.remove_pending(_post_event("Read"))
     # oldest (ts=1000.0) removed first
+    assert len(w._pending) == 1
+    remaining_key = list(w._pending.keys())[0]
+    assert remaining_key[2] == 1001.0  # pre_ts of b.py
+
+
+def test_remove_pending_no_match_is_noop():
+    """Test remove with different tool is noop"""
+    w = CurrentWidget()
+    with patch.object(w, "refresh"):
+        w.add_pending(_pre_event("Read", ts=1000.0))
+        w.remove_pending(_post_event("Bash"))  # different tool — no match
     assert len(w._pending) == 1
 
 
@@ -69,15 +83,12 @@ def test_reset_clears_pending_and_updates_model():
     """Test reset clears pending and reads model"""
     w = CurrentWidget()
     with patch.object(w, "refresh"):
-        w.add_pending(ToolEvent(
-            session_id="s", tool_name="Read", input_summary="a.py",
-            ts=1000.0, phase="pre"
-        ))
-        with patch.object(w, "_read_model_from_settings", return_value="claude-sonnet-4.5"):
-            w.reset("s")
+        w.add_pending(_pre_event("Read", "src/foo.py", ts=1000.0))
+        with patch.object(w, "_read_model_from_settings", return_value="claude-opus-4.6"):
+            w.reset("session123")
     assert len(w._pending) == 0
-    assert w._current_session_id == "s"
-    assert w._current_model == "claude-sonnet-4.5"
+    assert w._current_session_id == "session123"
+    assert w._current_model == "claude-opus-4.6"
 
 
 def test_get_current_tool_returns_none_when_empty():
