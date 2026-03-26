@@ -14,8 +14,8 @@ def test_summary_counts():
                                  ts=1.0, phase="post", success=True))
         s.update_event(ToolEvent(session_id="s", tool_name="Bash", input_summary="y",
                                  ts=2.0, phase="post", success=False))
-        s.update_event(SkillEvent(session_id="s", skill_name="tdd", ts=3.0))
-        s.update_event(AgentEvent(session_id="s", child_description="rev", ts=4.0))
+        s.update_event(SkillEvent(session_id="s", skill_name="tdd", ts=3.0, phase="post"))
+        s.update_event(AgentEvent(session_id="s", child_description="rev", ts=4.0, phase="post"))
     assert s._tools == 2
     assert s._errors == 1
     assert s._skills == 1
@@ -108,13 +108,15 @@ def test_skill_event_goes_to_history_not_active():
     history = HistoryWidget()
     summary = SummaryWidget()
 
-    ev = SkillEvent(session_id="s", skill_name="tdd", ts=1.0)
+    # Skills are displayed at pre phase (marks context boundary), counted at post phase
+    ev_pre = SkillEvent(session_id="s", skill_name="tdd", ts=1.0, phase="pre")
+    ev_post = SkillEvent(session_id="s", skill_name="tdd", ts=1.5, phase="post")
 
     with patch.object(active, "refresh"), \
          patch.object(history, "query_one", return_value=MagicMock()), \
          patch.object(summary, "refresh"):
-        history.add_event(ev)
-        summary.update_event(ev)
+        history.add_event(ev_pre)  # pre phase shown in history
+        summary.update_event(ev_post)  # post phase counted in summary
 
     assert len(active._pending) == 0
     assert len(history._lines) == 1
@@ -140,4 +142,4 @@ def test_session_switch_resets_all_widgets():
     assert len(active._pending) == 0
     assert summary._tools == 0
     assert summary._cost == 0.0
-    assert "new-session" in history._lines[0]
+    assert history._lines[0].startswith("[dim]") and "new-sess" in history._lines[0]

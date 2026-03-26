@@ -8,30 +8,35 @@ from hud.parser import EventParser
 
 def test_hook_to_parser_roundtrip(tmp_path):
     session_id = "integration-test"
+    # Match real Claude Code payload: transcript_path present in all events
+    transcript_path = f"/tmp/{session_id}.jsonl"
 
     # Simulate PreToolUse
     run_hook("pre", json.dumps({
         "tool_name": "Bash",
         "tool_input": {"command": "npm test"},
+        "transcript_path": transcript_path,
     }), session_id, str(tmp_path))
 
     # Simulate PostToolUse
     run_hook("post", json.dumps({
         "tool_name": "Bash",
         "tool_input": {"command": "npm test"},
-        "tool_output": {"output": "OK"},
+        "tool_response": {"output": "OK"},
         "usage": {"input_tokens": 500, "output_tokens": 100},
+        "transcript_path": transcript_path,
     }), session_id, str(tmp_path))
 
     # Simulate Skill
     run_hook("post", json.dumps({
         "tool_name": "Skill",
         "tool_input": {"skill": "brainstorming"},
+        "transcript_path": transcript_path,
     }), session_id, str(tmp_path))
 
     # Simulate Stop
     run_hook("stop", json.dumps({
-        "transcript_path": "/tmp/t.jsonl",
+        "transcript_path": transcript_path,
     }), session_id, str(tmp_path))
 
     # Parse all events

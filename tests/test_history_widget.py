@@ -21,9 +21,9 @@ def test_add_event_newest_on_top():
     with patch.object(w, "query_one", return_value=MagicMock()):
         w.add_event(_post_ok("Read", "a.py"))
         w.add_event(_post_ok("Bash", "ls"))
-    # newest (Bash) is at index 0
-    assert "Bash" in w._lines[0]
-    assert "Read" in w._lines[1]
+    # oldest (Read) at index 0, newest (Bash) at index -1
+    assert "Read" in w._lines[0]
+    assert "Bash" in w._lines[-1]
 
 
 def test_pre_phase_event_is_ignored():
@@ -48,14 +48,15 @@ def test_indentation_for_depth_one():
     w = HistoryWidget()
     with patch.object(w, "query_one", return_value=MagicMock()):
         w.add_event(_post_ok("Read", "foo.py", depth=1))
-    assert w._lines[0].startswith("  ")  # 2-space indent
+    # depth>0 uses "via:" label instead of indent — starts with timestamp
+    assert w._lines[0].startswith("08:")
 
 
 def test_no_indentation_for_depth_zero():
     w = HistoryWidget()
     with patch.object(w, "query_one", return_value=MagicMock()):
         w.add_event(_post_ok("Read", "foo.py", depth=0))
-    assert not w._lines[0].startswith(" ")
+    assert w._lines[0].startswith("08:")
 
 
 def test_error_excerpt_indented():
@@ -64,7 +65,8 @@ def test_error_excerpt_indented():
         w.add_event(_post_err("Bash", "npm test", depth=0, error="exit 1"))
     # Should have 2 lines: event line + error excerpt
     assert len(w._lines) == 2
-    assert w._lines[0].startswith("       ")  # 7 spaces for error excerpt (newest first)
+    assert w._lines[0].startswith("08:")  # main event line first
+    assert w._lines[1].startswith("       ")  # 7 spaces for error excerpt below
 
 
 def test_maxlen_500():
@@ -77,17 +79,17 @@ def test_maxlen_500():
 
 def test_agent_event_displayed():
     w = HistoryWidget()
-    ev = AgentEvent(session_id="s", child_description="code-reviewer", ts=1.0, depth=0)
+    ev = AgentEvent(session_id="s", child_description="code-reviewer", ts=1.0, depth=0, phase="pre")
     with patch.object(w, "query_one", return_value=MagicMock()):
         w.add_event(ev)
-    assert "AGENT" in w._lines[0]
+    assert "agent" in w._lines[0]
     assert "code-reviewer" in w._lines[0]
 
 
 def test_skill_event_displayed():
     w = HistoryWidget()
-    ev = SkillEvent(session_id="s", skill_name="tdd", ts=1.0, depth=0)
+    ev = SkillEvent(session_id="s", skill_name="tdd", ts=1.0, depth=0, phase="pre")
     with patch.object(w, "query_one", return_value=MagicMock()):
         w.add_event(ev)
-    assert "SKILL" in w._lines[0]
+    assert "skill" in w._lines[0]
     assert "tdd" in w._lines[0]

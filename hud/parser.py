@@ -13,10 +13,32 @@ _SUMMARY_KEYS: dict[str, list[str]] = {
     "Skill": ["skill"],
 }
 
+# Keys whose values are file/directory paths (candidates for relativization)
+_PATH_KEYS: frozenset[str] = frozenset({"file_path", "path"})
 
-def _extract_summary(tool_name: str, tool_input: dict) -> str:
+
+def rel_path(value: str, cwd: str) -> str:
+    """Return a path relative to cwd if value is absolute and under cwd, else return value unchanged."""
+    if not cwd or not value.startswith("/"):
+        return value
+    cwd_with_sep = cwd.rstrip("/") + "/"
+    if value.startswith(cwd_with_sep):
+        return value[len(cwd_with_sep):]
+    if value == cwd.rstrip("/"):
+        return "."
+    return value
+
+
+def _extract_summary(tool_name: str, tool_input: dict, cwd: str = "") -> str:
     keys = _SUMMARY_KEYS.get(tool_name, [])
-    parts = [str(tool_input.get(k, "")) for k in keys if k in tool_input]
+    parts = []
+    for k in keys:
+        if k not in tool_input:
+            continue
+        v = str(tool_input[k])
+        if k in _PATH_KEYS:
+            v = rel_path(v, cwd)
+        parts.append(v)
     text = " ".join(parts) if parts else str(tool_input)
     return text[:60]
 
@@ -61,6 +83,7 @@ class EventParser:
 
         tool_name = raw.get("tool_name", "")
         tool_input = raw.get("tool_input", {})
+        cwd = raw.get("cwd", "")
 
         # Agent pre: record in context stack, return AgentEvent at current depth
         if hook_type == "pre" and tool_name == "Agent":
@@ -72,6 +95,7 @@ class EventParser:
                 child_description=str(tool_input.get("description", ""))[:60],
                 ts=ts,
                 depth=depth,
+                phase="pre",
             )
 
         # Skill pre: record in context stack, return SkillEvent at current depth
@@ -84,6 +108,7 @@ class EventParser:
                 skill_name=str(tool_input.get("skill", "")),
                 ts=ts,
                 depth=depth,
+                phase="pre",
             )
 
         # Agent post: pop context stack, return AgentEvent
@@ -94,6 +119,7 @@ class EventParser:
                 child_description=str(tool_input.get("description", ""))[:60],
                 ts=ts,
                 depth=self._current_depth(),
+                phase="post",
             )
 
         # Skill post: pop context stack, return SkillEvent
@@ -104,6 +130,7 @@ class EventParser:
                 skill_name=str(tool_input.get("skill", "")),
                 ts=ts,
                 depth=self._current_depth(),
+                phase="post",
             )
 
         key = (session_id, tool_name)
@@ -115,7 +142,7 @@ class EventParser:
             return ToolEvent(
                 session_id=session_id,
                 tool_name=tool_name,
-                input_summary=_extract_summary(tool_name, tool_input),
+                input_summary=_extract_summary(tool_name, tool_input, cwd),
                 ts=ts,
                 phase="pre",
                 depth=depth,
@@ -134,7 +161,7 @@ class EventParser:
         return ToolEvent(
             session_id=session_id,
             tool_name=tool_name,
-            input_summary=_extract_summary(tool_name, tool_input),
+            input_summary=_extract_summary(tool_name, tool_input, cwd),
             ts=ts,
             phase="post",
             success=success,

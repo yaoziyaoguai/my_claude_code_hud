@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import asyncio
+import json
+from functools import lru_cache
 
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
 
+from hud.cost import estimate_cost_full
 from hud.parser import EventParser
 from hud.watcher import SessionWatcher
 from hud.widgets.active import ActiveWidget
 from hud.widgets.history import HistoryWidget
 from hud.widgets.summary import SummaryWidget
-from hud.models import ToolEvent
+from hud.models import ToolEvent, StopEvent, AgentEvent, SkillEvent
 
 CSS = """
 Horizontal {
@@ -90,12 +93,57 @@ class HudApp(App):
         except NoMatches:
             return
 
-        if isinstance(event, ToolEvent) and event.phase == "pre":
+        # Agent and Skill: display at pre-phase as context boundaries
+        if isinstance(event, (AgentEvent, SkillEvent)) and event.phase == "pre":
             active.add_pending(event)
-        elif isinstance(event, ToolEvent) and event.phase == "post":
-            active.remove_pending(event)
             history.add_event(event)
+            active.refresh()
+        # Agent and Skill: finalize at post-phase (count in summary, remove from active)
+        elif isinstance(event, (AgentEvent, SkillEvent)) and event.phase == "post":
+            active.remove_pending(event)
             summary.update_event(event)
+            active.refresh()
+        # Tool: display both pre and post, count at post
+        elif isinstance(event, ToolEvent):
+            if event.phase == "pre":
+                active.add_pending(event)
+                active.refresh()
+            else:  # post
+                active.remove_pending(event)
+                history.add_event(event)
+                summary.update_event(event)
+                active.refresh()
+        # Stop: always display and update summary
         else:
             history.add_event(event)
             summary.update_event(event)
+            if isinstance(event, StopEvent) and event.transcript_path:
+                self._update_cost_from_transcript(event.transcript_path, summary)
+
+    def _update_cost_from_transcript(self, path: str, summary: SummaryWidget) -> None:
+        tokens = self._read_transcript_tokens(path)
+        in_tok, cache_write, cache_read, out_tok = tokens
+        cost = estimate_cost_full(in_tok, cache_write, cache_read, out_tok)
+        summary.set_totals(in_tok + cache_write + cache_read, out_tok, cost)
+
+    @staticmethod
+    @lru_cache(maxsize=128)
+    def _read_transcript_tokens(path: str) -> tuple[int, int, int, int]:
+        """Read and cache token counts from transcript, limited to 128 recent paths."""
+        in_tok = cache_write = cache_read = out_tok = 0
+        try:
+            with open(path) as f:
+                for line in f:
+                    try:
+                        d = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if d.get("type") == "assistant":
+                        usage = d.get("message", {}).get("usage", {})
+                        in_tok += usage.get("input_tokens") or 0
+                        cache_write += usage.get("cache_creation_input_tokens") or 0
+                        cache_read += usage.get("cache_read_input_tokens") or 0
+                        out_tok += usage.get("output_tokens") or 0
+        except OSError:
+            pass
+        return (in_tok, cache_write, cache_read, out_tok)

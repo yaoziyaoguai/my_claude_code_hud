@@ -24,6 +24,7 @@ class AgentEvent:
     child_description: str
     ts: float
     depth: int = 0
+    phase: Literal["pre", "post"] = field(default="pre")
 
 
 @dataclass
@@ -32,6 +33,7 @@ class SkillEvent:
     skill_name: str
     ts: float
     depth: int = 0
+    phase: Literal["pre", "post"] = field(default="pre")
 
 
 @dataclass

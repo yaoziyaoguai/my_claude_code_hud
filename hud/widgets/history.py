@@ -8,46 +8,51 @@ from textual.containers import VerticalScroll
 from textual.widgets import Static
 
 from hud.models import ToolEvent, AgentEvent, SkillEvent, StopEvent
-
-_STYLE = {
-    "ok":      "[green][OK][/green]",
-    "err":     "[red][ERR][/red]",
-    "skill":   "[purple][SKILL][/purple]",
-    "agent":   "[blue][AGENT][/blue]",
-    "stop":    "[dim][STOP][/dim]",
-}
-
+from hud.widgets.display import TYPE_BADGE
 
 def _ts(ts: float) -> str:
-    return datetime.fromtimestamp(ts).strftime("%H:%M")
+    return datetime.fromtimestamp(ts).strftime("%H:%M:%S")
 
 
 def _format_event(event: ToolEvent | AgentEvent | SkillEvent | StopEvent) -> list[str]:
-    """Return list of lines (Rich markup strings) for an event. Newest line first."""
-    indent = "  " * getattr(event, "depth", 0)
+    """Return list of lines (Rich markup strings) for an event. First line first."""
+    depth = getattr(event, "depth", 0)
 
     if isinstance(event, AgentEvent):
-        return [f"{indent}{_ts(event.ts)} {_STYLE['agent']} {event.child_description}"]
+        # pre: display agent/subagent as context boundary
+        if event.phase == "pre":
+            badge = TYPE_BADGE["agent"] if event.depth == 0 else TYPE_BADGE["subagent"]
+            return [f"{_ts(event.ts)}  {badge}  {event.child_description}"]
+        # post: suppress (already shown in pre-phase)
+        return []
 
     if isinstance(event, SkillEvent):
-        return [f"{indent}{_ts(event.ts)} {_STYLE['skill']} {event.skill_name}"]
+        # pre: display skill as context boundary
+        if event.phase == "pre":
+            return [f"{_ts(event.ts)}  {TYPE_BADGE['skill']}  {event.skill_name}"]
+        # post: suppress (already shown in pre-phase)
+        return []
 
     if isinstance(event, StopEvent):
-        return [f"{_STYLE['stop']} session ended"]
+        return [f"{TYPE_BADGE['stop']}"]
 
     # ToolEvent post
     if isinstance(event, ToolEvent):
         if event.phase == "pre":
-            return []  # pre-phase ignored
-        dur = f" {event.duration_ms}ms" if event.duration_ms is not None else ""
-        if event.success is False:
-            err_indent = indent + "       "
-            lines = [f"{indent}{_ts(event.ts)} {_STYLE['err']} {event.tool_name}  {event.input_summary}{dur}"]
-            if event.error_excerpt:
-                lines.append(f"{err_indent}{event.error_excerpt}")
-            # Return error excerpt first (it's newer in append order, goes to top)
-            return list(reversed(lines))
-        return [f"{indent}{_ts(event.ts)} {_STYLE['ok']} {event.tool_name}  {event.input_summary}{dur}"]
+            return []
+        dur = f"  {event.duration_ms}ms" if event.duration_ms is not None else ""
+        status = TYPE_BADGE["ok"] if event.success is not False else TYPE_BADGE["err"]
+
+        # Nested tools (depth > 0) show indentation; parent already displayed as separate node
+        if depth > 0:
+            type_label = f"[cyan]↳[/cyan] {TYPE_BADGE['tool']}"
+        else:
+            type_label = TYPE_BADGE["tool"]
+
+        line = f"{_ts(event.ts)}  {type_label}  {status}  {event.tool_name}  {event.input_summary}{dur}"
+        if event.success is False and event.error_excerpt:
+            return [line, f"         {event.error_excerpt}"]
+        return [line]
 
     return []
 
@@ -69,13 +74,18 @@ class HistoryWidget(VerticalScroll):
 
     def add_event(self, event: ToolEvent | AgentEvent | SkillEvent | StopEvent) -> None:
         lines = _format_event(event)
-        # appendleft in reverse so lines[0] ends up at deque index 0 (top of display)
-        for line in reversed(lines):
-            self._lines.appendleft(line)
+
+        # Suppress consecutive stop markers — they cluster and add no information
+        if isinstance(event, StopEvent) and self._lines and self._lines[-1] == f"{TYPE_BADGE['stop']}":
+            return
+
+        for line in lines:
+            self._lines.append(line)
         if lines:
             self._refresh_content()
+            self.scroll_end(animate=False)
 
     def reset(self, session_id: str) -> None:
         self._lines.clear()
-        self._lines.appendleft(f"[dim]--- new session: {session_id} ---[/dim]")
+        self._lines.append(f"[dim]─── session {session_id[:8]} ───[/dim]")
         self._refresh_content()
