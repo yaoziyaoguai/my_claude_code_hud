@@ -2,6 +2,7 @@ import time
 from unittest.mock import patch
 from hud.widgets.active import ActiveWidget
 from hud.models import ToolEvent
+from rich.text import Text
 
 
 def _pre_event(tool_name, summary="x", session_id="s", ts=None):
@@ -75,3 +76,15 @@ def test_render_shows_tool_name_and_summary():
     plain = rendered.plain
     assert "Read" in plain
     assert "src/main.py" in plain
+
+
+def test_render_escapes_tool_name_and_summary():
+    """Regression test for markup in tool_name or input_summary."""
+    w = ActiveWidget()
+    with patch.object(w, "refresh"):
+        w.add_pending(_pre_event("Read[/cyan]", "src[cyan]file[/cyan].py", ts=time.time() - 0.5))
+    rendered = w.render()
+    assert isinstance(rendered, Text)
+    # Verify markup is valid by checking it can be rendered
+    # (if markup was invalid, rendering would fail)
+    assert "Read" in rendered.plain or "file" in rendered.plain

@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 
 from rich.text import Text
+from textual.markup import escape
 from textual.widget import Widget
 
 from hud.models import ToolEvent, AgentEvent, SkillEvent
@@ -70,5 +71,5 @@ class ActiveWidget(Widget):
                 prefix = ("  " * (depth - 1) + "↳ ") if depth > 0 else ""
                 badge_display = badge
 
-            lines.append(f"{prefix}{badge_display} {label}  {input_summary}  {elapsed:.1f}s")
+            lines.append(f"{prefix}{badge_display} {escape(label)}  {escape(input_summary)}  {elapsed:.1f}s")
         return Text.from_markup("\n".join(lines))

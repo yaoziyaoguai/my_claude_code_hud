@@ -86,9 +86,11 @@ class HistoryWidget(VerticalScroll):
             try:
                 self._refresh_content()
                 self.scroll_end(animate=False)
-            except Exception:
+            except Exception as e:
                 # Widget not yet mounted; data added to _lines and will refresh when ready
-                pass
+                import traceback
+                traceback.print_exc()
+
 
     def reset(self, session_id: str) -> None:
         self._lines.clear()
