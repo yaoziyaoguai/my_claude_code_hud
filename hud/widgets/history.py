@@ -82,8 +82,12 @@ class HistoryWidget(VerticalScroll):
         for line in lines:
             self._lines.append(line)
         if lines:
-            self._refresh_content()
-            self.scroll_end(animate=False)
+            try:
+                self._refresh_content()
+                self.scroll_end(animate=False)
+            except Exception:
+                # Widget not yet mounted; data added to _lines and will refresh when ready
+                pass
 
     def reset(self, session_id: str) -> None:
         self._lines.clear()
