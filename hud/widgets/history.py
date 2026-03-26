@@ -5,6 +5,7 @@ from datetime import datetime
 
 from rich.text import Text
 from textual.containers import VerticalScroll
+from textual.markup import escape
 from textual.widgets import Static
 
 from hud.models import ToolEvent, AgentEvent, SkillEvent, StopEvent
@@ -22,14 +23,14 @@ def _format_event(event: ToolEvent | AgentEvent | SkillEvent | StopEvent) -> lis
         # pre: display agent/subagent as context boundary
         if event.phase == "pre":
             badge = TYPE_BADGE["agent"] if event.depth == 0 else TYPE_BADGE["subagent"]
-            return [f"{_ts(event.ts)}  {badge}  {event.child_description}"]
+            return [f"{_ts(event.ts)}  {badge}  {escape(event.child_description)}"]
         # post: suppress (already shown in pre-phase)
         return []
 
     if isinstance(event, SkillEvent):
         # pre: display skill as context boundary
         if event.phase == "pre":
-            return [f"{_ts(event.ts)}  {TYPE_BADGE['skill']}  {event.skill_name}"]
+            return [f"{_ts(event.ts)}  {TYPE_BADGE['skill']}  {escape(event.skill_name)}"]
         # post: suppress (already shown in pre-phase)
         return []
 
@@ -49,9 +50,9 @@ def _format_event(event: ToolEvent | AgentEvent | SkillEvent | StopEvent) -> lis
         else:
             type_label = TYPE_BADGE["tool"]
 
-        line = f"{_ts(event.ts)}  {type_label}  {status}  {event.tool_name}  {event.input_summary}{dur}"
+        line = f"{_ts(event.ts)}  {type_label}  {status}  {escape(event.tool_name)}  {escape(event.input_summary)}{dur}"
         if event.success is False and event.error_excerpt:
-            return [line, f"         {event.error_excerpt}"]
+            return [line, f"         {escape(event.error_excerpt)}"]
         return [line]
 
     return []

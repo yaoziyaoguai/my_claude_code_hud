@@ -1,7 +1,8 @@
 from collections import deque
 from unittest.mock import patch, MagicMock
-from hud.widgets.history import HistoryWidget
+from hud.widgets.history import HistoryWidget, _format_event
 from hud.models import ToolEvent, AgentEvent, SkillEvent, StopEvent
+from textual.content import Content
 
 
 def _post_ok(tool_name="Read", summary="src/foo.py", depth=0, duration_ms=88):
@@ -93,3 +94,64 @@ def test_skill_event_displayed():
         w.add_event(ev)
     assert "skill" in w._lines[0]
     assert "tdd" in w._lines[0]
+
+
+def test_markup_in_tool_name_escaped():
+    """Regression test for malformed markup when tool_name contains '[' or ']'."""
+    event = ToolEvent(
+        session_id="s", tool_name="Read[/cyan]", input_summary="src/foo.py",
+        ts=1.0, phase="post", success=True, duration_ms=88, depth=1
+    )
+    lines = _format_event(event)
+    # Verify the generated markup is valid and can be parsed
+    for line in lines:
+        try:
+            Content.from_markup(line)
+        except Exception as e:
+            raise AssertionError(f"Generated invalid markup: {line!r}") from e
+
+
+def test_markup_in_input_summary_escaped():
+    """Regression test for malformed markup when input_summary contains markup."""
+    event = ToolEvent(
+        session_id="s", tool_name="Read", input_summary="src[cyan]foo[/cyan]/bar.py",
+        ts=1.0, phase="post", success=True, duration_ms=88, depth=0
+    )
+    lines = _format_event(event)
+    # Verify the generated markup is valid and can be parsed
+    for line in lines:
+        try:
+            Content.from_markup(line)
+        except Exception as e:
+            raise AssertionError(f"Generated invalid markup: {line!r}") from e
+
+
+def test_markup_in_error_excerpt_escaped():
+    """Regression test for malformed markup when error_excerpt contains markup."""
+    event = ToolEvent(
+        session_id="s", tool_name="Bash", input_summary="npm test",
+        ts=1.0, phase="post", success=False, error_excerpt="error[/cyan]message",
+        depth=0
+    )
+    lines = _format_event(event)
+    # Verify the generated markup is valid and can be parsed
+    for line in lines:
+        try:
+            Content.from_markup(line)
+        except Exception as e:
+            raise AssertionError(f"Generated invalid markup: {line!r}") from e
+
+
+def test_markup_in_agent_description_escaped():
+    """Regression test for malformed markup when agent description contains markup."""
+    event = AgentEvent(
+        session_id="s", child_description="agent[/cyan]name",
+        ts=1.0, depth=0, phase="pre"
+    )
+    lines = _format_event(event)
+    # Verify the generated markup is valid and can be parsed
+    for line in lines:
+        try:
+            Content.from_markup(line)
+        except Exception as e:
+            raise AssertionError(f"Generated invalid markup: {line!r}") from e
