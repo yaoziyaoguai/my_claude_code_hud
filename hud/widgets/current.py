@@ -37,6 +37,28 @@ class CurrentWidget(Widget):
         except (FileNotFoundError, json.JSONDecodeError, KeyError, ValueError):
             return "unknown"
 
+    def _calculate_context_usage(
+        self,
+        input_tokens: int | None,
+        cache_write_tokens: int | None,
+        cache_read_tokens: int | None,
+        output_tokens: int | None
+    ) -> tuple[int, float]:
+        """Calculate total tokens and percentage used.
+
+        Returns: (total_tokens_used, percentage)
+        """
+        total = 0
+        total += input_tokens or 0
+        total += cache_write_tokens or 0
+        total += cache_read_tokens or 0
+        total += output_tokens or 0
+
+        max_tokens = 200000
+        percentage = (total / max_tokens) * 100 if max_tokens > 0 else 0.0
+
+        return (total, percentage)
+
     def add_pending(self, event: ToolEvent | AgentEvent | SkillEvent) -> None:
         """Add a pre-phase event to pending tracking."""
         tool_name, label = self._event_display(event)

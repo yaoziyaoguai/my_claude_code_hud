@@ -158,3 +158,28 @@ def test_on_mount_sets_border_title():
     w = CurrentWidget()
     w.on_mount()
     assert w.border_title == "CURRENT"
+
+
+def test_calculate_context_usage_returns_percentage():
+    """Test context calculation from token counts."""
+    w = CurrentWidget()
+    # 2000 tokens used out of 200000 = 1%
+    result = w._calculate_context_usage(
+        input_tokens=1000,
+        cache_write_tokens=500,
+        cache_read_tokens=300,
+        output_tokens=200
+    )
+    assert result == (2000, 1.0)  # (total_tokens, percentage)
+
+
+def test_calculate_context_usage_handles_missing_values():
+    """Test calculation with None values."""
+    w = CurrentWidget()
+    result = w._calculate_context_usage(
+        input_tokens=500,
+        cache_write_tokens=None,
+        cache_read_tokens=None,
+        output_tokens=None
+    )
+    assert result == (500, 0.25)  # 500 / 200000 * 100 = 0.25%
