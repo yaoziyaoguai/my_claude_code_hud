@@ -11,7 +11,7 @@ from textual.css.query import NoMatches
 from hud.cost import estimate_cost_full
 from hud.parser import EventParser
 from hud.watcher import SessionWatcher
-from hud.widgets.active import ActiveWidget
+from hud.widgets.current import CurrentWidget
 from hud.widgets.history import HistoryWidget
 from hud.widgets.summary import SummaryWidget
 from hud.models import ToolEvent, StopEvent, AgentEvent, SkillEvent
@@ -23,7 +23,7 @@ Horizontal {
 Vertical {
     width: 3fr;
 }
-ActiveWidget {
+CurrentWidget {
     height: 7;
     border: solid $accent;
 }
@@ -51,7 +51,7 @@ class HudApp(App):
     def compose(self) -> ComposeResult:
         with Horizontal():
             with Vertical():
-                yield ActiveWidget()
+                yield CurrentWidget()
                 yield HistoryWidget()
             yield SummaryWidget()
 
@@ -78,7 +78,7 @@ class HudApp(App):
         self._current_session = session_id
         self._parser = EventParser()
         try:
-            self.query_one(ActiveWidget).reset()
+            self.query_one(CurrentWidget).reset()
             self.query_one(HistoryWidget).reset(session_id)
             self.query_one(SummaryWidget).reset(session_id)
         except NoMatches:
@@ -87,7 +87,7 @@ class HudApp(App):
     def _handle_raw(self, raw: dict) -> None:
         event = self._parser.parse(raw)
         try:
-            active = self.query_one(ActiveWidget)
+            current = self.query_one(CurrentWidget)
             history = self.query_one(HistoryWidget)
             summary = self.query_one(SummaryWidget)
         except NoMatches:
@@ -95,24 +95,24 @@ class HudApp(App):
 
         # Agent and Skill: display at pre-phase as context boundaries
         if isinstance(event, (AgentEvent, SkillEvent)) and event.phase == "pre":
-            active.add_pending(event)
+            current.add_pending(event)
             history.add_event(event)
-            active.refresh()
-        # Agent and Skill: finalize at post-phase (count in summary, remove from active)
+            current.refresh()
+        # Agent and Skill: finalize at post-phase (count in summary, remove from current)
         elif isinstance(event, (AgentEvent, SkillEvent)) and event.phase == "post":
-            active.remove_pending(event)
+            current.remove_pending(event)
             summary.update_event(event)
-            active.refresh()
+            current.refresh()
         # Tool: display both pre and post, count at post
         elif isinstance(event, ToolEvent):
             if event.phase == "pre":
-                active.add_pending(event)
-                active.refresh()
+                current.add_pending(event)
+                current.refresh()
             else:  # post
-                active.remove_pending(event)
+                current.remove_pending(event)
                 history.add_event(event)
                 summary.update_event(event)
-                active.refresh()
+                current.refresh()
         # Stop: always display and update summary
         else:
             history.add_event(event)
