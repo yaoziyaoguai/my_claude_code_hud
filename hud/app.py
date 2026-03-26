@@ -118,6 +118,7 @@ class HudApp(App):
             history.add_event(event)
             summary.update_event(event)
             if isinstance(event, StopEvent) and event.transcript_path:
+                current.set_transcript_path(event.transcript_path)
                 self._update_cost_from_transcript(event.transcript_path, summary)
 
     def _update_cost_from_transcript(self, path: str, summary: SummaryWidget) -> None:

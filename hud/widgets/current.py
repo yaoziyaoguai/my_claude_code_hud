@@ -113,6 +113,11 @@ class CurrentWidget(Widget):
         in_tok, cache_write, cache_read, out_tok = self._read_transcript_tokens(transcript_path)
         self._context_tokens = in_tok + cache_write + cache_read + out_tok
 
+    def set_transcript_path(self, transcript_path: str | None) -> None:
+        """Set current session's transcript path for context calculation."""
+        if transcript_path:
+            self.update_context_from_transcript(transcript_path)
+
     def _event_display(self, event: ToolEvent | AgentEvent | SkillEvent) -> tuple[str, str]:
         """Extract tool name and display label from event."""
         if isinstance(event, AgentEvent):
@@ -140,13 +145,19 @@ class CurrentWidget(Widget):
         # Line 1: Model
         lines.append(f"Model: {self._current_model}")
 
-        # Line 2: Context (placeholder for now)
-        lines.append("Context: ██████░░░░ 60% (1200/2000)")
+        # Line 2: Context with progress bar
+        total_tokens, percentage = self._calculate_context_usage(
+            self._context_tokens, 0, 0, 0
+        )
+        used = min(int(percentage / 10), 10)  # 10 chars for bar
+        bar = "█" * used + "░" * (10 - used)
+        formatted_tokens = f"({total_tokens}/200000)" if total_tokens > 0 else "(0/200000)"
+        lines.append(f"Context: {bar} {percentage:.0f}% {formatted_tokens}")
 
-        # Line 3: Current tool (placeholder)
-        current_tool = self._get_current_tool()
-        if current_tool:
-            lines.append(f"Current: {current_tool}")
+        # Line 3: Current tool with elapsed time
+        current = self._get_current_tool()
+        if current:
+            lines.append(f"Current: {current}")
         else:
             lines.append("Current: idle")
 
