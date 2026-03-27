@@ -9,7 +9,7 @@ from textual.markup import escape
 from textual.widget import Widget
 
 from hud.models import ToolEvent, AgentEvent, SkillEvent
-from hud.widgets.display import PENDING_BADGE, badge_and_label
+from hud.widgets.display import PENDING_BADGE, badge_and_label, bold
 
 # Constants
 MAX_CONTEXT_TOKENS = 200000
@@ -122,16 +122,11 @@ class CurrentWidget(Widget):
         self._context_tokens = 0
 
     def update_context_from_transcript(self, transcript_path: str | None) -> None:
-        """Read token counts from transcript and update context display."""
+        """Read token counts from last request in transcript and update context display."""
         if not transcript_path:
             return
         in_tok, cache_write, cache_read, out_tok = self._read_request_tokens(transcript_path)
         self._context_tokens = in_tok + cache_write + cache_read + out_tok
-
-    def set_transcript_path(self, transcript_path: str | None) -> None:
-        """Set current session's transcript path for context calculation."""
-        if transcript_path:
-            self.update_context_from_transcript(transcript_path)
 
     def _event_display(self, event: ToolEvent | AgentEvent | SkillEvent) -> tuple[str, str]:
         """Extract tool name and display label from event."""
@@ -142,15 +137,15 @@ class CurrentWidget(Widget):
         return event.tool_name, event.input_summary
 
     def _get_current_tool(self) -> str | None:
-        """Get the most recent pending tool with elapsed time, with highlighted name."""
+        """Get the most recent pending tool with elapsed time."""
         if not self._pending:
             return None
 
         latest = max(self._pending.items(), key=lambda x: x[0][2])
-        (_, tool_name, pre_ts), (input_summary, depth) = latest
+        (_, tool_name, pre_ts), _ = latest
 
         elapsed = time.time() - pre_ts
-        return f"Current: [bold]{escape(tool_name)}[/bold] ({elapsed:.1f}s) ↻"
+        return f"Current: {bold(tool_name)} ({elapsed:.1f}s) ↻"
 
     def render(self) -> Text:
         """Render current state: model, context, current tool."""

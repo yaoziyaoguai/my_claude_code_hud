@@ -5,11 +5,10 @@ from datetime import datetime
 
 from rich.text import Text
 from textual.containers import VerticalScroll
-from textual.markup import escape
 from textual.widgets import Static
 
 from hud.models import ToolEvent, AgentEvent, SkillEvent, StopEvent
-from hud.widgets.display import TYPE_BADGE
+from hud.widgets.display import TYPE_BADGE, bold
 
 def _ts(ts: float) -> str:
     return datetime.fromtimestamp(ts).strftime("%H:%M:%S")
@@ -22,12 +21,12 @@ def _format_event(event: ToolEvent | AgentEvent | SkillEvent | StopEvent) -> lis
     if isinstance(event, AgentEvent):
         if event.phase == "pre":
             badge = TYPE_BADGE["agent"] if event.depth == 0 else TYPE_BADGE["subagent"]
-            return [f"{_ts(event.ts)}  {badge}  [bold]{escape(event.child_description)}[/bold]"]
+            return [f"{_ts(event.ts)}  {badge}  {bold(event.child_description)}"]
         return []
 
     if isinstance(event, SkillEvent):
         if event.phase == "pre":
-            return [f"{_ts(event.ts)}  {TYPE_BADGE['skill']}  [bold]{escape(event.skill_name)}[/bold]"]
+            return [f"{_ts(event.ts)}  {TYPE_BADGE['skill']}  {bold(event.skill_name)}"]
         return []
 
     if isinstance(event, StopEvent):
@@ -44,8 +43,11 @@ def _format_event(event: ToolEvent | AgentEvent | SkillEvent | StopEvent) -> lis
         else:
             type_label = TYPE_BADGE["tool"]
 
-        line = f"{_ts(event.ts)}  {type_label}  {status}  [bold]{escape(event.tool_name)}[/bold]  {escape(event.input_summary)}{dur}"
+        line = f"{_ts(event.ts)}  {type_label}  {status}  {bold(event.tool_name)}  {bold(event.input_summary)}"
+        if dur:
+            line += f"  {dur.strip()}"
         if event.success is False and event.error_excerpt:
+            from textual.markup import escape
             return [line, f"         {escape(event.error_excerpt)}"]
         return [line]
 
@@ -80,10 +82,8 @@ class HistoryWidget(VerticalScroll):
             try:
                 self._refresh_content()
                 self.scroll_end(animate=False)
-            except Exception as e:
-                # Widget not yet mounted; data added to _lines and will refresh when ready
-                import traceback
-                traceback.print_exc()
+            except Exception:
+                pass  # Widget not yet mounted; _lines updated, will render on mount
 
 
     def reset(self, session_id: str) -> None:

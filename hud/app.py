@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-from functools import lru_cache
 
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -128,7 +127,7 @@ class HudApp(App):
             history.add_event(event)
             summary.update_event(event)
             if isinstance(event, StopEvent) and event.transcript_path:
-                current.set_transcript_path(event.transcript_path)
+                current.update_context_from_transcript(event.transcript_path)
                 self._update_cost_from_transcript(event.transcript_path, summary)
 
     def _update_cost_from_transcript(self, path: str, summary: SummaryWidget) -> None:
@@ -138,14 +137,11 @@ class HudApp(App):
         summary.set_totals(in_tok + cache_write + cache_read, out_tok, cost)
 
     @staticmethod
-    @lru_cache(maxsize=128)
     def _read_cumulative_tokens(path: str) -> tuple[int, int, int, int]:
-        """Read and cache cumulative token counts across entire transcript (all assistant messages).
+        """Read cumulative token counts across entire transcript (all assistant messages).
 
-        This represents the total cost of the entire session for SummaryWidget display.
-        Returns: (cumulative input_tokens, cache_write, cache_read, cumulative output_tokens)
-
-        Note: See CurrentWidget._read_request_tokens() for per-request context tracking.
+        Called once per StopEvent — no caching needed since transcripts grow during a session.
+        Returns: (input_tokens, cache_write, cache_read, output_tokens)
         """
         in_tok = cache_write = cache_read = out_tok = 0
         try:

@@ -1,4 +1,5 @@
 """Shared display constants for HistoryWidget and ActiveWidget."""
+from textual.markup import escape
 
 TYPE_BADGE = {
     "agent":    "[bold blue]agent[/bold blue]",
@@ -19,6 +20,11 @@ PENDING_BADGE = {
     "sub":      "[cyan]…[/cyan]",
     "skill":    "[magenta]…[/magenta]",
 }
+
+
+def bold(s: str) -> str:
+    """Wrap a string in bold Rich markup, safely escaping any markup characters."""
+    return f"[bold]{escape(s)}[/bold]"
 
 
 def badge_and_label(tool_name: str, depth: int) -> tuple[str, str]:
