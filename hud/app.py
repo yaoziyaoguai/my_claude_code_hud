@@ -69,7 +69,7 @@ class HudApp(App):
                 tail_worker = self.run_worker(
                     self._tail_session(latest), exclusive=False, name="tail"
                 )
-            elif latest and tail_worker is not None and tail_worker.is_done:
+            elif latest and tail_worker is not None and tail_worker.is_finished:
                 # Restart if tail worker died unexpectedly
                 tail_worker = self.run_worker(
                     self._tail_session(latest), exclusive=False, name="tail"
