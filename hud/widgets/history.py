@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections import deque
 from datetime import datetime
 
-from rich.text import Text
 from textual.containers import VerticalScroll
+from textual.markup import escape
 from textual.widgets import Static
 
 from hud.models import ToolEvent, AgentEvent, SkillEvent, StopEvent
@@ -47,7 +47,6 @@ def _format_event(event: ToolEvent | AgentEvent | SkillEvent | StopEvent) -> lis
         if dur:
             line += f"  {dur.strip()}"
         if event.success is False and event.error_excerpt:
-            from textual.markup import escape
             return [line, f"         {escape(event.error_excerpt)}"]
         return [line]
 

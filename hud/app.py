@@ -127,8 +127,12 @@ class HudApp(App):
             history.add_event(event)
             summary.update_event(event)
             if isinstance(event, StopEvent) and event.transcript_path:
-                current.update_context_from_transcript(event.transcript_path)
-                self._update_cost_from_transcript(event.transcript_path, summary)
+                # Single transcript scan for both context display and cost totals
+                tokens = self._read_cumulative_tokens(event.transcript_path)
+                in_tok, cache_write, cache_read, out_tok = tokens
+                current._context_tokens = in_tok + cache_write + cache_read + out_tok
+                cost = estimate_cost_full(in_tok, cache_write, cache_read, out_tok)
+                summary.set_totals(in_tok + cache_write + cache_read, out_tok, cost)
 
     def _update_cost_from_transcript(self, path: str, summary: SummaryWidget) -> None:
         tokens = self._read_cumulative_tokens(path)
