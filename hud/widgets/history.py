@@ -69,6 +69,10 @@ class HistoryWidget(VerticalScroll):
 
     def on_mount(self) -> None:
         self.border_title = "HISTORY"
+        # Render any lines buffered before mount, then scroll to bottom
+        if self._lines:
+            self._refresh_content()
+        self.call_after_refresh(self.scroll_end, animate=False)
 
     def _refresh_content(self) -> None:
         self.query_one("#history-content", Static).update("\n".join(self._lines))
