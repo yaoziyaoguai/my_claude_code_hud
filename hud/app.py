@@ -58,28 +58,27 @@ class HudApp(App):
         self.run_worker(self._watch_loop(), exclusive=True)
 
     async def _watch_loop(self) -> None:
-        tail_task: asyncio.Task | None = None
-
-        async def _tail_session(session_id: str) -> None:
-            try:
-                async for raw in self._watcher.tail(session_id):
-                    self._handle_raw(raw)
-            except asyncio.CancelledError:
-                raise
-            except Exception as e:
-                self.log.error(f"_tail_session error: {e}")
+        tail_worker = None
 
         while True:
             latest = self._watcher.discover_latest_session()
             if latest and latest != self._current_session:
-                if tail_task and not tail_task.done():
-                    tail_task.cancel()
+                if tail_worker is not None:
+                    tail_worker.cancel()
                 self._switch_session(latest)
-                tail_task = asyncio.create_task(_tail_session(latest))
-            elif latest and tail_task and tail_task.done() and not tail_task.cancelled():
-                # Restart tail if it died unexpectedly (e.g. exception)
-                tail_task = asyncio.create_task(_tail_session(latest))
+                tail_worker = self.run_worker(
+                    self._tail_session(latest), exclusive=False, name="tail"
+                )
+            elif latest and tail_worker is not None and tail_worker.is_done:
+                # Restart if tail worker died unexpectedly
+                tail_worker = self.run_worker(
+                    self._tail_session(latest), exclusive=False, name="tail"
+                )
             await asyncio.sleep(0.5)
+
+    async def _tail_session(self, session_id: str) -> None:
+        async for raw in self._watcher.tail(session_id):
+            self._handle_raw(raw)
 
     def _switch_session(self, session_id: str) -> None:
         self._current_session = session_id
