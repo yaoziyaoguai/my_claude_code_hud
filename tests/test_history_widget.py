@@ -155,3 +155,35 @@ def test_markup_in_agent_description_escaped():
             Content.from_markup(line)
         except Exception as e:
             raise AssertionError(f"Generated invalid markup: {line!r}") from e
+
+
+import re
+
+def _plain(s):
+    return re.sub(r'\[/?[^\]]+\]', '', s)
+
+def test_tool_no_span_has_no_gutter():
+    e = ToolEvent(session_id="s", tool_name="Read", input_summary="f",
+                  ts=1.0, phase="post", success=True, span_id=None, span_color=None)
+    lines = _format_event(e)
+    assert lines and "│" not in lines[0]
+
+def test_top_level_tool_has_single_bright_gutter():
+    e = ToolEvent(session_id="s", tool_name="Read", input_summary="f",
+                  ts=1.0, phase="post", success=True, depth=0, span_id=1, span_color="cyan")
+    lines = _format_event(e)
+    assert lines and lines[0].count("│") == 1
+    assert "dim" not in lines[0]   # top-level is bright
+
+def test_nested_tool_has_dim_multi_gutter():
+    e = ToolEvent(session_id="s", tool_name="Bash", input_summary="ls",
+                  ts=1.0, phase="post", success=True, depth=1, span_id=2, span_color="cyan")
+    lines = _format_event(e)
+    assert lines and lines[0].count("│") >= 2
+    assert "dim" in lines[0]   # nested is dim
+
+def test_agent_start_has_gutter():
+    e = AgentEvent(session_id="s", child_description="My Agent",
+                   ts=1.0, phase="pre", depth=0, span_id=1, span_color="yellow")
+    lines = _format_event(e)
+    assert lines and "│" in lines[0]

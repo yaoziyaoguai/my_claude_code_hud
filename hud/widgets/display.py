@@ -32,6 +32,23 @@ def bold(s: str) -> str:
     """Wrap a string in bold Rich markup, safely escaping any markup characters."""
     return f"[bold]{escape(s)}[/bold]"
 
+
+def span_prefix(span_color: str | None, depth: int = 0) -> str:
+    """Colored gutter prefix for a history line.
+
+    None span  → ""
+    depth 0    → bright single │:  "[{color}]│[/{color}] "
+    depth > 0  → dim multi │:      "[dim {color}]{'│'*(depth+1)}[/dim {color}] "
+
+    Dim indicates child span; same color = same root ancestor.
+    """
+    if not span_color:
+        return ""
+    gutter = "│" * (depth + 1)
+    if depth == 0:
+        return f"[{span_color}]{gutter}[/{span_color}] "
+    return f"[dim {span_color}]{gutter}[/dim {span_color}] "
+
 def badge_and_label(tool_name: str, depth: int) -> tuple[str, str]:
     """Return (PENDING_BADGE key, display label) for a pending entry."""
     if tool_name == "Agent":

@@ -7,7 +7,7 @@ from textual.containers import VerticalScroll
 from textual.widgets import Static
 
 from hud.models import ToolEvent, AgentEvent, SkillEvent, StopEvent
-from hud.widgets.display import TYPE_BADGE, bold, escape
+from hud.widgets.display import TYPE_BADGE, bold, escape, span_prefix
 
 def _ts(ts: float) -> str:
     return datetime.fromtimestamp(ts).strftime("%H:%M:%S")
@@ -16,42 +16,37 @@ def _ts(ts: float) -> str:
 def _format_event(event: ToolEvent | AgentEvent | SkillEvent | StopEvent) -> list[str]:
     """Return list of lines (Rich markup strings) for an event. First line first."""
     depth = getattr(event, "depth", 0)
+    span_color = getattr(event, "span_color", None)
+    prefix = span_prefix(span_color, depth)
 
     if isinstance(event, AgentEvent):
         if event.phase == "pre":
             badge = TYPE_BADGE["agent"] if event.depth == 0 else TYPE_BADGE["subagent"]
-            return [f"{_ts(event.ts)}  {badge}  {bold(event.child_description)}  [dim]▶[/dim]"]
-        # post: show completion with duration
+            return [f"{prefix}{_ts(event.ts)}  {badge}  {bold(event.child_description)}  [dim]▶[/dim]"]
         badge = TYPE_BADGE["agent"] if event.depth == 0 else TYPE_BADGE["subagent"]
         dur = f"  {event.duration_ms}ms" if event.duration_ms is not None else ""
-        return [f"{_ts(event.ts)}  {badge}  {bold(event.child_description)}  [dim]◀{dur}[/dim]"]
+        return [f"{prefix}{_ts(event.ts)}  {badge}  {bold(event.child_description)}  [dim]◀{dur}[/dim]"]
 
     if isinstance(event, SkillEvent):
         if event.phase == "pre":
-            return [f"{_ts(event.ts)}  {TYPE_BADGE['skill']}  {bold(event.skill_name)}  [dim]▶[/dim]"]
-        # post: show completion with duration
+            return [f"{prefix}{_ts(event.ts)}  {TYPE_BADGE['skill']}  {bold(event.skill_name)}  [dim]▶[/dim]"]
         dur = f"  {event.duration_ms}ms" if event.duration_ms is not None else ""
-        return [f"{_ts(event.ts)}  {TYPE_BADGE['skill']}  {bold(event.skill_name)}  [dim]◀{dur}[/dim]"]
+        return [f"{prefix}{_ts(event.ts)}  {TYPE_BADGE['skill']}  {bold(event.skill_name)}  [dim]◀{dur}[/dim]"]
 
     if isinstance(event, StopEvent):
-        return [f"{TYPE_BADGE['stop']}"]
+        return [f"{TYPE_BADGE['stop']}"]  # intentionally no span prefix on stop markers
 
     if isinstance(event, ToolEvent):
         if event.phase == "pre":
             return []
         dur = f"  {event.duration_ms}ms" if event.duration_ms is not None else ""
         status = TYPE_BADGE["ok"] if event.success is not False else TYPE_BADGE["err"]
-
-        if depth > 0:
-            type_label = f"[cyan]↳[/cyan] {TYPE_BADGE['tool']}"
-        else:
-            type_label = TYPE_BADGE["tool"]
-
-        line = f"{_ts(event.ts)}  {type_label}  {status}  {bold(event.tool_name)}  {escape(event.input_summary)}"
+        type_label = (f"[cyan]↳[/cyan] {TYPE_BADGE['tool']}" if depth > 0 else TYPE_BADGE["tool"])
+        line = f"{prefix}{_ts(event.ts)}  {type_label}  {status}  {bold(event.tool_name)}  {escape(event.input_summary)}"
         if dur:
             line += f"  {dur.strip()}"
         if event.success is False and event.error_excerpt:
-            return [line, f"         {escape(event.error_excerpt)}"]
+            return [line, f"{prefix}         {escape(event.error_excerpt)}"]
         return [line]
 
     return []
