@@ -1,6 +1,6 @@
 """Shared display constants for HistoryWidget and ActiveWidget."""
 
-from hud.colors import SPAN_COLORS  # noqa: F401  (used by renderer in Task 3)
+from hud.colors import SPAN_COLORS  # noqa: F401 — re-exported for consumers who want the palette without importing from hud.colors directly
 
 
 def escape(s: str) -> str:

@@ -157,11 +157,6 @@ def test_markup_in_agent_description_escaped():
             raise AssertionError(f"Generated invalid markup: {line!r}") from e
 
 
-import re
-
-def _plain(s):
-    return re.sub(r'\[/?[^\]]+\]', '', s)
-
 def test_tool_no_span_has_no_gutter():
     e = ToolEvent(session_id="s", tool_name="Read", input_summary="f",
                   ts=1.0, phase="post", success=True, span_id=None, span_color=None)
