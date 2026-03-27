@@ -54,8 +54,10 @@ def _extract_tokens(raw: dict) -> tuple[int | None, int | None]:
 class EventParser:
     def __init__(self) -> None:
         self._pending: dict[tuple[str, str], float] = {}
-        # Each entry: (label, tool_name) — tool_name used to match post for pop
         self._context_stack: list[tuple[str, str]] = []
+        # Track pre-phase timestamps for Agent/Skill duration calculation
+        self._agent_pre_ts: list[float] = []
+        self._skill_pre_ts: list[float] = []
 
     def _current_depth(self) -> int:
         return len(self._context_stack)
@@ -90,6 +92,7 @@ class EventParser:
             depth = self._current_depth()
             label = f"agent:{str(tool_input.get('description', ''))[:20]}"
             self._context_stack.append((label, "Agent"))
+            self._agent_pre_ts.append(ts)
             return AgentEvent(
                 session_id=session_id,
                 child_description=str(tool_input.get("description", ""))[:60],
@@ -103,6 +106,7 @@ class EventParser:
             depth = self._current_depth()
             label = f"skill:{str(tool_input.get('skill', ''))}"
             self._context_stack.append((label, "Skill"))
+            self._skill_pre_ts.append(ts)
             return SkillEvent(
                 session_id=session_id,
                 skill_name=str(tool_input.get("skill", "")),
@@ -111,26 +115,32 @@ class EventParser:
                 phase="pre",
             )
 
-        # Agent post: pop context stack, return AgentEvent
+        # Agent post: pop context stack, return AgentEvent with duration
         if hook_type == "post" and tool_name == "Agent":
             self._pop_context("Agent")
+            pre_ts = self._agent_pre_ts.pop() if self._agent_pre_ts else None
+            duration_ms = int((ts - pre_ts) * 1000) if pre_ts is not None else None
             return AgentEvent(
                 session_id=session_id,
                 child_description=str(tool_input.get("description", ""))[:60],
                 ts=ts,
                 depth=self._current_depth(),
                 phase="post",
+                duration_ms=duration_ms,
             )
 
-        # Skill post: pop context stack, return SkillEvent
+        # Skill post: pop context stack, return SkillEvent with duration
         if hook_type == "post" and tool_name == "Skill":
             self._pop_context("Skill")
+            pre_ts = self._skill_pre_ts.pop() if self._skill_pre_ts else None
+            duration_ms = int((ts - pre_ts) * 1000) if pre_ts is not None else None
             return SkillEvent(
                 session_id=session_id,
                 skill_name=str(tool_input.get("skill", "")),
                 ts=ts,
                 depth=self._current_depth(),
                 phase="post",
+                duration_ms=duration_ms,
             )
 
         key = (session_id, tool_name)

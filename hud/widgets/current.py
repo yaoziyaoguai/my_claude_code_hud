@@ -142,10 +142,12 @@ class CurrentWidget(Widget):
             return None
 
         latest = max(self._pending.items(), key=lambda x: x[0][2])
-        (_, tool_name, pre_ts), _ = latest
+        (_, tool_name, pre_ts), (label, depth) = latest
 
         elapsed = time.time() - pre_ts
-        return f"Current: {bold(tool_name)} ({elapsed:.1f}s) ↻"
+        # For Agent/Skill show the label (description/skill_name); for tools show tool_name
+        display_name = label if tool_name in ("Agent", "Skill") else tool_name
+        return f"Current: {bold(display_name)} ({elapsed:.1f}s) ↻"
 
     def render(self) -> Text:
         """Render current state: model, context, current tool."""

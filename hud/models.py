@@ -25,6 +25,7 @@ class AgentEvent:
     ts: float
     depth: int = 0
     phase: Literal["pre", "post"] = field(default="pre")
+    duration_ms: int | None = None
 
 
 @dataclass
@@ -34,6 +35,7 @@ class SkillEvent:
     ts: float
     depth: int = 0
     phase: Literal["pre", "post"] = field(default="pre")
+    duration_ms: int | None = None
 
 
 @dataclass

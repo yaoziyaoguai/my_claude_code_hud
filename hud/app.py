@@ -107,9 +107,10 @@ class HudApp(App):
             current.add_pending(event)
             history.add_event(event)
             current.refresh()
-        # Agent and Skill: finalize at post-phase (count in summary, remove from current)
+        # Agent and Skill: finalize at post-phase (add close marker to history, update summary)
         elif isinstance(event, (AgentEvent, SkillEvent)) and event.phase == "post":
             current.remove_pending(event)
+            history.add_event(event)
             summary.update_event(event)
             current.refresh()
         # Tool: display both pre and post, count at post

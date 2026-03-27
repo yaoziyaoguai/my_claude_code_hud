@@ -21,13 +21,18 @@ def _format_event(event: ToolEvent | AgentEvent | SkillEvent | StopEvent) -> lis
     if isinstance(event, AgentEvent):
         if event.phase == "pre":
             badge = TYPE_BADGE["agent"] if event.depth == 0 else TYPE_BADGE["subagent"]
-            return [f"{_ts(event.ts)}  {badge}  {bold(event.child_description)}"]
-        return []
+            return [f"{_ts(event.ts)}  {badge}  {bold(event.child_description)}  [dim]▶[/dim]"]
+        # post: show completion with duration
+        badge = TYPE_BADGE["agent"] if event.depth == 0 else TYPE_BADGE["subagent"]
+        dur = f"  {event.duration_ms}ms" if event.duration_ms is not None else ""
+        return [f"{_ts(event.ts)}  {badge}  {bold(event.child_description)}  [dim]◀{dur}[/dim]"]
 
     if isinstance(event, SkillEvent):
         if event.phase == "pre":
-            return [f"{_ts(event.ts)}  {TYPE_BADGE['skill']}  {bold(event.skill_name)}"]
-        return []
+            return [f"{_ts(event.ts)}  {TYPE_BADGE['skill']}  {bold(event.skill_name)}  [dim]▶[/dim]"]
+        # post: show completion with duration
+        dur = f"  {event.duration_ms}ms" if event.duration_ms is not None else ""
+        return [f"{_ts(event.ts)}  {TYPE_BADGE['skill']}  {bold(event.skill_name)}  [dim]◀{dur}[/dim]"]
 
     if isinstance(event, StopEvent):
         return [f"{TYPE_BADGE['stop']}"]
@@ -43,7 +48,7 @@ def _format_event(event: ToolEvent | AgentEvent | SkillEvent | StopEvent) -> lis
         else:
             type_label = TYPE_BADGE["tool"]
 
-        line = f"{_ts(event.ts)}  {type_label}  {status}  {bold(event.tool_name)}  {bold(event.input_summary)}"
+        line = f"{_ts(event.ts)}  {type_label}  {status}  {bold(event.tool_name)}  {escape(event.input_summary)}"
         if dur:
             line += f"  {dur.strip()}"
         if event.success is False and event.error_excerpt:
