@@ -49,3 +49,21 @@ def test_agent_event_has_depth():
 def test_skill_event_has_depth():
     ev = SkillEvent(session_id="s", skill_name="tdd", ts=1.0)
     assert ev.depth == 0
+
+
+def test_tool_event_has_span_fields():
+    e = ToolEvent(session_id="s", tool_name="Read", input_summary="f", ts=1.0, phase="post")
+    assert e.span_id is None
+    assert e.span_color is None
+
+
+def test_agent_event_has_span_fields():
+    e = AgentEvent(session_id="s", child_description="test", ts=1.0)
+    assert e.span_id is None
+    assert e.span_color is None
+
+
+def test_skill_event_has_span_fields():
+    e = SkillEvent(session_id="s", skill_name="simplify", ts=1.0)
+    assert e.span_id is None
+    assert e.span_color is None

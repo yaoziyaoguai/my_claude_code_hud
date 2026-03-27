@@ -16,6 +16,8 @@ class ToolEvent:
     output_tokens: int | None = None
     depth: int = 0
     context_label: str | None = None
+    span_id: int | None = None
+    span_color: str | None = None
 
 
 @dataclass
@@ -26,6 +28,8 @@ class AgentEvent:
     depth: int = 0
     phase: Literal["pre", "post"] = field(default="pre")
     duration_ms: int | None = None
+    span_id: int | None = None
+    span_color: str | None = None
 
 
 @dataclass
@@ -36,6 +40,8 @@ class SkillEvent:
     depth: int = 0
     phase: Literal["pre", "post"] = field(default="pre")
     duration_ms: int | None = None
+    span_id: int | None = None
+    span_color: str | None = None
 
 
 @dataclass
