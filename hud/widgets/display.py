@@ -1,5 +1,9 @@
 """Shared display constants for HistoryWidget and ActiveWidget."""
-from rich.markup import escape  # re-exported for callers
+
+
+def escape(s: str) -> str:
+    """Escape all [ characters so Rich never interprets s as markup."""
+    return s.replace("[", "\\[")
 
 TYPE_BADGE = {
     "agent":    "[bold blue]agent[/bold blue]",

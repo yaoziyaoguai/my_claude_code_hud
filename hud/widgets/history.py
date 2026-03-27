@@ -62,17 +62,12 @@ class HistoryWidget(VerticalScroll):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._lines: deque[str] = deque(maxlen=500)
-        self._live = False  # True after mount; False during initial bulk load
 
     def compose(self):
         yield Static("", id="history-content", markup=True)
 
     def on_mount(self) -> None:
         self.border_title = "HISTORY"
-        self._live = True
-        if self._lines:
-            self._refresh_content()
-            self.call_after_refresh(self.scroll_end, animate=False)
 
     def _refresh_content(self) -> None:
         self.query_one("#history-content", Static).update("\n".join(self._lines))
@@ -86,8 +81,9 @@ class HistoryWidget(VerticalScroll):
 
         for line in lines:
             self._lines.append(line)
-        if lines and self._live:
+        if lines:
             self._refresh_content()
+            # Defer scroll until after Textual has repainted the widget with its new height
             self.call_after_refresh(self.scroll_end, animate=False)
 
 
