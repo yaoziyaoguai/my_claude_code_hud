@@ -55,13 +55,11 @@ def _extract_tokens(raw: dict) -> tuple[int | None, int | None]:
 class EventParser:
     def __init__(self) -> None:
         self._pending: dict[tuple[str, str], float] = {}
-        self._context_stack: list[tuple[str, str]] = []
+        # Each entry: (label, tool_name, span_id, root_color)
+        self._context_stack: list[tuple[str, str, int, str]] = []
         # Track pre-phase timestamps for Agent/Skill duration calculation
         self._agent_pre_ts: list[float] = []
         self._skill_pre_ts: list[float] = []
-        # Span stack for gutter coloring. Each entry: (span_id, root_color, tool_name).
-        # root_color is the top-level ancestor's color; children inherit it.
-        self._span_stack: list[tuple[int, str, str]] = []
         self._next_span_id: int = 0
         self._top_level_span_count: int = 0  # drives palette index for top-level agents
 
@@ -77,28 +75,12 @@ class EventParser:
                 self._context_stack.pop(i)
                 break
 
-    def _current_span(self) -> tuple[int, str] | tuple[None, None]:
-        if self._span_stack:
-            sid, color, _ = self._span_stack[-1]
-            return sid, color
+    def _current_span_info(self) -> tuple[int, str] | tuple[None, None]:
+        """Return (span_id, root_color) from stack top, or (None, None) if empty."""
+        if self._context_stack:
+            _, _, span_id, root_color = self._context_stack[-1]
+            return span_id, root_color
         return None, None
-
-    def _push_span(self, tool_name: str) -> tuple[int, str]:
-        """Push a new span. Top-level gets a new palette color; children inherit parent."""
-        self._next_span_id += 1
-        if self._span_stack:
-            _, root_color, _ = self._span_stack[-1]   # inherit parent
-        else:
-            root_color = SPAN_COLORS[self._top_level_span_count % len(SPAN_COLORS)]
-            self._top_level_span_count += 1
-        self._span_stack.append((self._next_span_id, root_color, tool_name))
-        return self._next_span_id, root_color
-
-    def _pop_span(self, tool_name: str) -> None:
-        for i in range(len(self._span_stack) - 1, -1, -1):
-            if self._span_stack[i][2] == tool_name:
-                self._span_stack.pop(i)
-                break
 
     def parse(self, raw: dict) -> ToolEvent | AgentEvent | SkillEvent | StopEvent:
         hook_type = raw.get("hook_type", "")
@@ -120,9 +102,16 @@ class EventParser:
         if hook_type == "pre" and tool_name == "Agent":
             depth = self._current_depth()
             label = f"agent:{str(tool_input.get('description', ''))[:20]}"
-            self._context_stack.append((label, "Agent"))
+            # Allocate span: top-level gets new palette color, child inherits parent
+            self._next_span_id += 1
+            span_id = self._next_span_id
+            if self._context_stack:
+                _, _, _, root_color = self._context_stack[-1]  # inherit parent
+            else:
+                root_color = SPAN_COLORS[self._top_level_span_count % len(SPAN_COLORS)]
+                self._top_level_span_count += 1
+            self._context_stack.append((label, "Agent", span_id, root_color))
             self._agent_pre_ts.append(ts)
-            span_id, span_color = self._push_span("Agent")
             return AgentEvent(
                 session_id=session_id,
                 child_description=str(tool_input.get("description", ""))[:60],
@@ -130,16 +119,22 @@ class EventParser:
                 depth=depth,
                 phase="pre",
                 span_id=span_id,
-                span_color=span_color,
+                span_color=root_color,
             )
 
         # Skill pre: record in context stack, return SkillEvent at current depth
         if hook_type == "pre" and tool_name == "Skill":
             depth = self._current_depth()
             label = f"skill:{str(tool_input.get('skill', ''))}"
-            self._context_stack.append((label, "Skill"))
+            self._next_span_id += 1
+            span_id = self._next_span_id
+            if self._context_stack:
+                _, _, _, root_color = self._context_stack[-1]
+            else:
+                root_color = SPAN_COLORS[self._top_level_span_count % len(SPAN_COLORS)]
+                self._top_level_span_count += 1
+            self._context_stack.append((label, "Skill", span_id, root_color))
             self._skill_pre_ts.append(ts)
-            span_id, span_color = self._push_span("Skill")
             return SkillEvent(
                 session_id=session_id,
                 skill_name=str(tool_input.get("skill", "")),
@@ -147,14 +142,13 @@ class EventParser:
                 depth=depth,
                 phase="pre",
                 span_id=span_id,
-                span_color=span_color,
+                span_color=root_color,
             )
 
         # Agent post: pop context stack, return AgentEvent with duration
         if hook_type == "post" and tool_name == "Agent":
-            span_id, span_color = self._current_span()
+            span_id, span_color = self._current_span_info()
             self._pop_context("Agent")
-            self._pop_span("Agent")
             pre_ts = self._agent_pre_ts.pop() if self._agent_pre_ts else None
             duration_ms = int((ts - pre_ts) * 1000) if pre_ts is not None else None
             return AgentEvent(
@@ -170,9 +164,8 @@ class EventParser:
 
         # Skill post: pop context stack, return SkillEvent with duration
         if hook_type == "post" and tool_name == "Skill":
-            span_id, span_color = self._current_span()
+            span_id, span_color = self._current_span_info()
             self._pop_context("Skill")
-            self._pop_span("Skill")
             pre_ts = self._skill_pre_ts.pop() if self._skill_pre_ts else None
             duration_ms = int((ts - pre_ts) * 1000) if pre_ts is not None else None
             return SkillEvent(
@@ -186,7 +179,7 @@ class EventParser:
                 span_color=span_color,
             )
 
-        span_id, span_color = self._current_span()
+        span_id, span_color = self._current_span_info()
         key = (session_id, tool_name)
         depth = self._current_depth()
         label = self._current_label()
