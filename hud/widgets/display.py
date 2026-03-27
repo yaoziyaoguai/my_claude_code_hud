@@ -1,5 +1,7 @@
 """Shared display constants for HistoryWidget and ActiveWidget."""
 
+from hud.colors import SPAN_COLORS  # noqa: F401  (used by renderer in Task 3)
+
 
 def escape(s: str) -> str:
     """Escape all [ characters so Rich never interprets s as markup."""
