@@ -69,10 +69,6 @@ class HistoryWidget(VerticalScroll):
 
     def on_mount(self) -> None:
         self.border_title = "HISTORY"
-        # Render any lines buffered before mount, then scroll to bottom
-        if self._lines:
-            self._refresh_content()
-        self.call_after_refresh(self.scroll_end, animate=False)
 
     def _refresh_content(self) -> None:
         self.query_one("#history-content", Static).update("\n".join(self._lines))
@@ -87,14 +83,13 @@ class HistoryWidget(VerticalScroll):
         for line in lines:
             self._lines.append(line)
         if lines:
-            try:
-                self._refresh_content()
-                self.scroll_end(animate=False)
-            except Exception:
-                pass  # Widget not yet mounted; _lines updated, will render on mount
+            self._refresh_content()
+            # Defer scroll until after Textual has repainted the widget with its new height
+            self.call_after_refresh(self.scroll_end, animate=False)
 
 
     def reset(self, session_id: str) -> None:
         self._lines.clear()
         self._lines.append(f"[dim]─── session {session_id[:8]} ───[/dim]")
         self._refresh_content()
+        self.call_after_refresh(self.scroll_end, animate=False)

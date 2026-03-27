@@ -32,6 +32,9 @@ class SessionWatcher:
                             continue
                 offset = path.stat().st_size
 
+        # Yield control so Textual can repaint all historical events before polling begins
+        await asyncio.sleep(0)
+
         # Poll for new lines
         while True:
             await asyncio.sleep(0.05)  # 50ms polling
