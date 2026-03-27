@@ -142,7 +142,7 @@ class CurrentWidget(Widget):
         return event.tool_name, event.input_summary
 
     def _get_current_tool(self) -> str | None:
-        """Get the most recent pending tool with elapsed time."""
+        """Get the most recent pending tool with elapsed time, with highlighted name."""
         if not self._pending:
             return None
 
@@ -151,7 +151,9 @@ class CurrentWidget(Widget):
         (_, tool_name, pre_ts), (input_summary, depth) = latest
 
         elapsed = time.time() - pre_ts
-        return f"{escape(tool_name)} ({elapsed:.1f}s) ↻"
+        # Highlight tool name with brackets
+        highlighted_tool = f"[{escape(tool_name)}]"
+        return f"Current: {highlighted_tool} ({elapsed:.1f}s) ↻"
 
     def render(self) -> Text:
         """Render current state: model, context, current tool."""
@@ -177,7 +179,7 @@ class CurrentWidget(Widget):
         # Line 3: Current tool with elapsed time
         current = self._get_current_tool()
         if current:
-            lines.append(f"Current: {current}")
+            lines.append(current)
         else:
             lines.append("Current: idle")
 
