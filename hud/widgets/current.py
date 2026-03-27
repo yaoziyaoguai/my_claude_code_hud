@@ -5,11 +5,10 @@ import time
 from pathlib import Path
 
 from rich.text import Text
-from textual.markup import escape
 from textual.widget import Widget
 
 from hud.models import ToolEvent, AgentEvent, SkillEvent
-from hud.widgets.display import PENDING_BADGE, badge_and_label, bold
+from hud.widgets.display import PENDING_BADGE, badge_and_label, bold, escape
 
 # Constants
 MAX_CONTEXT_TOKENS = 200000

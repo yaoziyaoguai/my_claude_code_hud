@@ -134,12 +134,6 @@ class HudApp(App):
                 cost = estimate_cost_full(in_tok, cache_write, cache_read, out_tok)
                 summary.set_totals(in_tok + cache_write + cache_read, out_tok, cost)
 
-    def _update_cost_from_transcript(self, path: str, summary: SummaryWidget) -> None:
-        tokens = self._read_cumulative_tokens(path)
-        in_tok, cache_write, cache_read, out_tok = tokens
-        cost = estimate_cost_full(in_tok, cache_write, cache_read, out_tok)
-        summary.set_totals(in_tok + cache_write + cache_read, out_tok, cost)
-
     @staticmethod
     def _read_cumulative_tokens(path: str) -> tuple[int, int, int, int]:
         """Read cumulative token counts across entire transcript (all assistant messages).
