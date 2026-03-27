@@ -20,43 +20,31 @@ def _format_event(event: ToolEvent | AgentEvent | SkillEvent | StopEvent) -> lis
     depth = getattr(event, "depth", 0)
 
     if isinstance(event, AgentEvent):
-        # pre: display agent/subagent as context boundary
         if event.phase == "pre":
             badge = TYPE_BADGE["agent"] if event.depth == 0 else TYPE_BADGE["subagent"]
-            # Highlight agent/subagent name with Unicode brackets (避免 Rich 标记冲突)
-            highlighted_name = f"《{escape(event.child_description)}》"
-            return [f"{_ts(event.ts)}  {badge}  {highlighted_name}"]
-        # post: suppress (already shown in pre-phase)
+            return [f"{_ts(event.ts)}  {badge}  [bold]{escape(event.child_description)}[/bold]"]
         return []
 
     if isinstance(event, SkillEvent):
-        # pre: display skill as context boundary
         if event.phase == "pre":
-            # Highlight skill name with Unicode brackets (避免 Rich 标记冲突)
-            highlighted_name = f"《{escape(event.skill_name)}》"
-            return [f"{_ts(event.ts)}  {TYPE_BADGE['skill']}  {highlighted_name}"]
-        # post: suppress (already shown in pre-phase)
+            return [f"{_ts(event.ts)}  {TYPE_BADGE['skill']}  [bold]{escape(event.skill_name)}[/bold]"]
         return []
 
     if isinstance(event, StopEvent):
         return [f"{TYPE_BADGE['stop']}"]
 
-    # ToolEvent post
     if isinstance(event, ToolEvent):
         if event.phase == "pre":
             return []
         dur = f"  {event.duration_ms}ms" if event.duration_ms is not None else ""
         status = TYPE_BADGE["ok"] if event.success is not False else TYPE_BADGE["err"]
 
-        # Nested tools (depth > 0) show indentation; parent already displayed as separate node
         if depth > 0:
             type_label = f"[cyan]↳[/cyan] {TYPE_BADGE['tool']}"
         else:
             type_label = TYPE_BADGE["tool"]
 
-        # Highlight tool name with Unicode brackets (避免 Rich 标记冲突)
-        highlighted_tool = f"《{escape(event.tool_name)}》"
-        line = f"{_ts(event.ts)}  {type_label}  {status}  {highlighted_tool}  {escape(event.input_summary)}{dur}"
+        line = f"{_ts(event.ts)}  {type_label}  {status}  [bold]{escape(event.tool_name)}[/bold]  {escape(event.input_summary)}{dur}"
         if event.success is False and event.error_excerpt:
             return [line, f"         {escape(event.error_excerpt)}"]
         return [line]

@@ -62,8 +62,13 @@ class HudApp(App):
         tail_task: asyncio.Task | None = None
 
         async def _tail_session(session_id: str) -> None:
-            async for raw in self._watcher.tail(session_id):
-                self._handle_raw(raw)
+            try:
+                async for raw in self._watcher.tail(session_id):
+                    self._handle_raw(raw)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                self.log.error(f"_tail_session error: {e}")
 
         while True:
             latest = self._watcher.discover_latest_session()
@@ -71,6 +76,9 @@ class HudApp(App):
                 if tail_task and not tail_task.done():
                     tail_task.cancel()
                 self._switch_session(latest)
+                tail_task = asyncio.create_task(_tail_session(latest))
+            elif latest and tail_task and tail_task.done() and not tail_task.cancelled():
+                # Restart tail if it died unexpectedly (e.g. exception)
                 tail_task = asyncio.create_task(_tail_session(latest))
             await asyncio.sleep(0.5)
 
@@ -86,6 +94,8 @@ class HudApp(App):
 
     def _handle_raw(self, raw: dict) -> None:
         event = self._parser.parse(raw)
+        if event is None:
+            return
         try:
             current = self.query_one(CurrentWidget)
             history = self.query_one(HistoryWidget)

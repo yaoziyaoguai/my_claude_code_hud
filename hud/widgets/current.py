@@ -146,14 +146,11 @@ class CurrentWidget(Widget):
         if not self._pending:
             return None
 
-        # Get most recent entry (highest timestamp)
         latest = max(self._pending.items(), key=lambda x: x[0][2])
         (_, tool_name, pre_ts), (input_summary, depth) = latest
 
         elapsed = time.time() - pre_ts
-        # Highlight tool name with Unicode brackets (避免 Rich 标记冲突)
-        highlighted_tool = f"《{escape(tool_name)}》"
-        return f"Current: {highlighted_tool} ({elapsed:.1f}s) ↻"
+        return f"Current: [bold]{escape(tool_name)}[/bold] ({elapsed:.1f}s) ↻"
 
     def render(self) -> Text:
         """Render current state: model, context, current tool."""
