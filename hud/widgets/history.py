@@ -4,11 +4,10 @@ from collections import deque
 from datetime import datetime
 
 from textual.containers import VerticalScroll
-from textual.markup import escape
 from textual.widgets import Static
 
 from hud.models import ToolEvent, AgentEvent, SkillEvent, StopEvent
-from hud.widgets.display import TYPE_BADGE, bold
+from hud.widgets.display import TYPE_BADGE, bold, escape
 
 def _ts(ts: float) -> str:
     return datetime.fromtimestamp(ts).strftime("%H:%M:%S")
