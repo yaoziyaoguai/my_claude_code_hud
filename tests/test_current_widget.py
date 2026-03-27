@@ -197,13 +197,13 @@ def test_calculate_context_usage_handles_missing_values():
     assert result == (500, 0.25)  # 500 / 200000 * 100 = 0.25%
 
 
-def test_read_transcript_tokens_sums_all_events():
-    """Test reading and summing tokens from transcript."""
+def test_read_request_tokens_reads_last_event():
+    """Test reading tokens from LAST assistant message only (not cumulative)."""
     import json
     import tempfile
 
     w = CurrentWidget()
-    # Create temporary transcript
+    # Create temporary transcript with two assistant messages
     with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
         f.write(json.dumps({
             "type": "assistant",
@@ -216,6 +216,7 @@ def test_read_transcript_tokens_sums_all_events():
                 }
             }
         }) + "\n")
+        # Second (latest) message should be used
         f.write(json.dumps({
             "type": "assistant",
             "message": {
@@ -230,10 +231,35 @@ def test_read_transcript_tokens_sums_all_events():
         temp_path = f.name
 
     try:
-        in_tok, cache_write, cache_read, out_tok = w._read_transcript_tokens(temp_path)
-        assert in_tok == 300
-        assert cache_write == 10
-        assert cache_read == 5
-        assert out_tok == 125
+        # Should return tokens from LAST message only, not cumulative
+        in_tok, cache_write, cache_read, out_tok = w._read_request_tokens(temp_path)
+        assert in_tok == 200  # From last message
+        assert cache_write == 0  # From last message
+        assert cache_read == 0  # From last message
+        assert out_tok == 75  # From last message
     finally:
         os.unlink(temp_path)
+
+
+def test_render_shows_warning_only_for_extremely_large_responses():
+    """Test that warning is only shown for unusually large single responses."""
+    w = CurrentWidget()
+    # Extremely large single response (edge case)
+    w._context_tokens = 250_000  # 125% of limit
+    output = str(w.render())
+    # Should show warning icon
+    assert "⚠️" in output
+    # Should NOT show percentage > 100%
+    assert "125%" not in output
+
+
+def test_render_shows_percentage_normally():
+    """Test normal percentage display for typical requests."""
+    w = CurrentWidget()
+    # Typical context usage from a single response
+    w._context_tokens = 100_000  # 50% of 200k
+    output = str(w.render())
+    # Should show 50%
+    assert "50%" in output
+    # Should NOT show warning
+    assert "⚠️" not in output

@@ -78,7 +78,7 @@ class HudApp(App):
         self._current_session = session_id
         self._parser = EventParser()
         try:
-            self.query_one(CurrentWidget).reset()
+            self.query_one(CurrentWidget).reset(session_id)
             self.query_one(HistoryWidget).reset(session_id)
             self.query_one(SummaryWidget).reset(session_id)
         except NoMatches:
@@ -122,15 +122,21 @@ class HudApp(App):
                 self._update_cost_from_transcript(event.transcript_path, summary)
 
     def _update_cost_from_transcript(self, path: str, summary: SummaryWidget) -> None:
-        tokens = self._read_transcript_tokens(path)
+        tokens = self._read_cumulative_tokens(path)
         in_tok, cache_write, cache_read, out_tok = tokens
         cost = estimate_cost_full(in_tok, cache_write, cache_read, out_tok)
         summary.set_totals(in_tok + cache_write + cache_read, out_tok, cost)
 
     @staticmethod
     @lru_cache(maxsize=128)
-    def _read_transcript_tokens(path: str) -> tuple[int, int, int, int]:
-        """Read and cache token counts from transcript, limited to 128 recent paths."""
+    def _read_cumulative_tokens(path: str) -> tuple[int, int, int, int]:
+        """Read and cache cumulative token counts across entire transcript (all assistant messages).
+
+        This represents the total cost of the entire session for SummaryWidget display.
+        Returns: (cumulative input_tokens, cache_write, cache_read, cumulative output_tokens)
+
+        Note: See CurrentWidget._read_request_tokens() for per-request context tracking.
+        """
         in_tok = cache_write = cache_read = out_tok = 0
         try:
             with open(path) as f:

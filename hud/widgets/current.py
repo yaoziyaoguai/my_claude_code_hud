@@ -11,6 +11,10 @@ from textual.widget import Widget
 from hud.models import ToolEvent, AgentEvent, SkillEvent
 from hud.widgets.display import PENDING_BADGE, badge_and_label
 
+# Constants
+MAX_CONTEXT_TOKENS = 200000
+PROGRESS_BAR_WIDTH = 10
+
 
 class CurrentWidget(Widget):
     """Displays current Claude Code session state: model, context usage, current tool."""
@@ -54,18 +58,25 @@ class CurrentWidget(Widget):
         total += cache_read_tokens or 0
         total += output_tokens or 0
 
-        max_tokens = 200000
-        percentage = (total / max_tokens) * 100 if max_tokens > 0 else 0.0
+        percentage = (total / MAX_CONTEXT_TOKENS) * 100 if MAX_CONTEXT_TOKENS > 0 else 0.0
 
         return (total, percentage)
 
-    def _read_transcript_tokens(self, transcript_path: str) -> tuple[int, int, int, int]:
-        """Read and sum all token counts from transcript file.
+    def _read_request_tokens(self, transcript_path: str) -> tuple[int, int, int, int]:
+        """Read token counts from the LAST assistant message in transcript file.
 
-        Returns: (input_tokens, cache_write, cache_read, output_tokens)
+        This represents the CURRENT REQUEST's context usage (not session cumulative).
+        Only the most recent assistant response is considered, showing the snapshot
+        of context consumption for the current Claude Code request.
+
+        Contrast with HudApp._read_cumulative_tokens() which sums ALL messages
+        for the entire session (used by SummaryWidget).
+
+        Returns: (input_tokens, cache_write, cache_read, output_tokens) from last message only
         """
-        in_tok = cache_write = cache_read = out_tok = 0
         try:
+            # Read all lines and get the last assistant message
+            last_usage = None
             with open(transcript_path) as f:
                 for line in f:
                     try:
@@ -73,14 +84,18 @@ class CurrentWidget(Widget):
                     except json.JSONDecodeError:
                         continue
                     if d.get("type") == "assistant":
-                        usage = d.get("message", {}).get("usage", {})
-                        in_tok += usage.get("input_tokens") or 0
-                        cache_write += usage.get("cache_creation_input_tokens") or 0
-                        cache_read += usage.get("cache_read_input_tokens") or 0
-                        out_tok += usage.get("output_tokens") or 0
+                        last_usage = d.get("message", {}).get("usage", {})
+
+            # Extract token counts from last message
+            if last_usage:
+                in_tok = last_usage.get("input_tokens") or 0
+                cache_write = last_usage.get("cache_creation_input_tokens") or 0
+                cache_read = last_usage.get("cache_read_input_tokens") or 0
+                out_tok = last_usage.get("output_tokens") or 0
+                return (in_tok, cache_write, cache_read, out_tok)
         except OSError:
             pass
-        return (in_tok, cache_write, cache_read, out_tok)
+        return (0, 0, 0, 0)
 
     def add_pending(self, event: ToolEvent | AgentEvent | SkillEvent) -> None:
         """Add a pre-phase event to pending tracking."""
@@ -110,7 +125,7 @@ class CurrentWidget(Widget):
         """Read token counts from transcript and update context display."""
         if not transcript_path:
             return
-        in_tok, cache_write, cache_read, out_tok = self._read_transcript_tokens(transcript_path)
+        in_tok, cache_write, cache_read, out_tok = self._read_request_tokens(transcript_path)
         self._context_tokens = in_tok + cache_write + cache_read + out_tok
 
     def set_transcript_path(self, transcript_path: str | None) -> None:
@@ -149,10 +164,15 @@ class CurrentWidget(Widget):
         total_tokens, percentage = self._calculate_context_usage(
             self._context_tokens, 0, 0, 0
         )
-        used = min(int(percentage / 10), 10)  # 10 chars for bar
-        bar = "█" * used + "░" * (10 - used)
-        formatted_tokens = f"({total_tokens}/200000)" if total_tokens > 0 else "(0/200000)"
-        lines.append(f"Context: {bar} {percentage:.0f}% {formatted_tokens}")
+        capped_percentage = min(percentage, 100.0)  # Cap at 100%
+        used = int(capped_percentage / PROGRESS_BAR_WIDTH)
+        bar = "█" * used + "░" * (PROGRESS_BAR_WIDTH - used)
+        formatted_tokens = f"({total_tokens}/{MAX_CONTEXT_TOKENS})" if total_tokens > 0 else f"(0/{MAX_CONTEXT_TOKENS})"
+        # Show warning if over limit
+        if percentage > 100:
+            lines.append(f"Context: {bar} ⚠️  {formatted_tokens}")
+        else:
+            lines.append(f"Context: {bar} {percentage:.0f}% {formatted_tokens}")
 
         # Line 3: Current tool with elapsed time
         current = self._get_current_tool()
