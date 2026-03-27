@@ -23,8 +23,8 @@ def _format_event(event: ToolEvent | AgentEvent | SkillEvent | StopEvent) -> lis
         # pre: display agent/subagent as context boundary
         if event.phase == "pre":
             badge = TYPE_BADGE["agent"] if event.depth == 0 else TYPE_BADGE["subagent"]
-            # Highlight agent/subagent name with brackets
-            highlighted_name = f"[{escape(event.child_description)}]"
+            # Highlight agent/subagent name with Unicode brackets (避免 Rich 标记冲突)
+            highlighted_name = f"《{escape(event.child_description)}》"
             return [f"{_ts(event.ts)}  {badge}  {highlighted_name}"]
         # post: suppress (already shown in pre-phase)
         return []
@@ -32,8 +32,8 @@ def _format_event(event: ToolEvent | AgentEvent | SkillEvent | StopEvent) -> lis
     if isinstance(event, SkillEvent):
         # pre: display skill as context boundary
         if event.phase == "pre":
-            # Highlight skill name with brackets
-            highlighted_name = f"[{escape(event.skill_name)}]"
+            # Highlight skill name with Unicode brackets (避免 Rich 标记冲突)
+            highlighted_name = f"《{escape(event.skill_name)}》"
             return [f"{_ts(event.ts)}  {TYPE_BADGE['skill']}  {highlighted_name}"]
         # post: suppress (already shown in pre-phase)
         return []
@@ -54,8 +54,8 @@ def _format_event(event: ToolEvent | AgentEvent | SkillEvent | StopEvent) -> lis
         else:
             type_label = TYPE_BADGE["tool"]
 
-        # Highlight tool name with brackets
-        highlighted_tool = f"[{escape(event.tool_name)}]"
+        # Highlight tool name with Unicode brackets (避免 Rich 标记冲突)
+        highlighted_tool = f"《{escape(event.tool_name)}》"
         line = f"{_ts(event.ts)}  {type_label}  {status}  {highlighted_tool}  {escape(event.input_summary)}{dur}"
         if event.success is False and event.error_excerpt:
             return [line, f"         {escape(event.error_excerpt)}"]

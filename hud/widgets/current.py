@@ -151,8 +151,8 @@ class CurrentWidget(Widget):
         (_, tool_name, pre_ts), (input_summary, depth) = latest
 
         elapsed = time.time() - pre_ts
-        # Highlight tool name with brackets
-        highlighted_tool = f"[{escape(tool_name)}]"
+        # Highlight tool name with Unicode brackets (避免 Rich 标记冲突)
+        highlighted_tool = f"《{escape(tool_name)}》"
         return f"Current: {highlighted_tool} ({elapsed:.1f}s) ↻"
 
     def render(self) -> Text:
